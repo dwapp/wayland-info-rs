@@ -1,5 +1,7 @@
 use std::env;
 use wayland_client::{protocol::wl_registry, Connection, Dispatch, QueueHandle};
+use colored::Colorize;
+
 // This struct represents the state of our app. This simple app does not
 // need any state, but this type still supports the `Dispatch` implementations.
 struct AppData;
@@ -27,7 +29,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
         // `global` event, which signals a new available global.
         // When receiving this event, we just print its characteristics in this example.
         if let wl_registry::Event::Global { name, interface, version } = event {
-            println!("[{}] {} (v{})", name, interface, version);
+            println!("name: {:<4} interface: {:<45} version: {}", name, interface.cyan(), version.to_string().yellow());
         }
     }
 }
@@ -35,7 +37,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
 fn main() {
     if env::var("WAYLAND_DISPLAY").is_err() {
         env::set_var("WAYLAND_DISPLAY", "wayland-0");
-        println!("WAYLAND_DISPLAY was not set. Will try to use 'wayland-0'.");
+        eprintln!("{}", "WAYLAND_DISPLAY was not set. Will try te use 'wayland-0'.".red());
     }
     // Create a Wayland connection by connecting to the server through the
     // environment-provided configuration.
@@ -56,10 +58,6 @@ fn main() {
     // wl_registry will be assigned to, and the user-data that should be associated
     // with this registry (here it is () as we don't need user-data).
     let _registry = display.get_registry(&qh, ());
-
-    // At this point everything is ready, and we just need to wait to receive the events
-    // from the wl_registry. Our callback will print the advertised globals.
-    println!("Advertised globals:");
 
     // To actually receive the events, we invoke the `roundtrip` method. This method
     // is special and you will generally only invoke it during the setup of your program:
