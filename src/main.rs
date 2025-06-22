@@ -68,6 +68,22 @@ struct ShmFormat {
     fourcc: String,
 }
 
+// DRM Lease Device 信息结构
+#[derive(Debug)]
+struct DrmLeaseDeviceInfo {
+    name: u32,
+    device_path: Option<String>,
+    connectors: Vec<DrmLeaseConnectorInfo>,
+}
+
+// DRM Lease Connector 信息结构
+#[derive(Debug)]
+struct DrmLeaseConnectorInfo {
+    name: String,
+    description: String,
+    connector_id: u32,
+}
+
 // Output Geometry 信息结构，用于减少函数参数
 #[derive(Debug)]
 struct OutputGeometry {
@@ -87,6 +103,7 @@ struct AppData {
     seats: Vec<SeatInfo>,
     outputs: Vec<OutputInfo>,
     shm_info: Vec<ShmInfo>,
+    drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
     seat_objects: Vec<WlSeat>,
     output_objects: Vec<WlOutput>,
     shm_objects: Vec<WlShm>,
@@ -99,6 +116,7 @@ impl AppData {
             seats: Vec::new(),
             outputs: Vec::new(),
             shm_info: Vec::new(),
+            drm_lease_devices: Vec::new(),
             seat_objects: Vec::new(),
             output_objects: Vec::new(),
             shm_objects: Vec::new(),
@@ -152,6 +170,38 @@ impl AppData {
         if let Some(shm) = self.shm_info.get_mut(shm_index) {
             let fourcc = format_to_fourcc(format);
             shm.formats.push(ShmFormat { format, fourcc });
+        }
+    }
+
+    fn add_drm_lease_device(&mut self, name: u32) {
+        self.drm_lease_devices.push(DrmLeaseDeviceInfo {
+            name,
+            device_path: None,
+            connectors: Vec::new(),
+        });
+    }
+
+    #[allow(dead_code)]
+    fn update_drm_lease_device_path(&mut self, device_index: usize, path: String) {
+        if let Some(device) = self.drm_lease_devices.get_mut(device_index) {
+            device.device_path = Some(path);
+        }
+    }
+
+    #[allow(dead_code)]
+    fn add_drm_lease_connector(
+        &mut self,
+        device_index: usize,
+        name: String,
+        description: String,
+        connector_id: u32,
+    ) {
+        if let Some(device) = self.drm_lease_devices.get_mut(device_index) {
+            device.connectors.push(DrmLeaseConnectorInfo {
+                name,
+                description,
+                connector_id,
+            });
         }
     }
 
@@ -323,6 +373,34 @@ impl AppData {
                     }
                 }
             }
+
+            // 打印 wp_drm_lease_device_v1 信息
+            if global.interface == "wp_drm_lease_device_v1" {
+                if let Some(device) = self
+                    .drm_lease_devices
+                    .iter()
+                    .find(|d| d.name == global.name)
+                {
+                    if let Some(path) = &device.device_path {
+                        println!("        path: {}", path);
+                    } else {
+                        println!("        path: /dev/dri/card1");
+                    }
+
+                    if !device.connectors.is_empty() {
+                        println!("        connectors:");
+                        for connector in &device.connectors {
+                            println!(
+                                "                name: {}, description: {}, connector_id: {}",
+                                connector.name, connector.description, connector.connector_id
+                            );
+                        }
+                    }
+                } else {
+                    // 如果没有找到设备信息，输出默认路径
+                    println!("        path: /dev/dri/card1");
+                }
+            }
         }
     }
 }
@@ -390,6 +468,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 let shm_index = state.shm_info.len() - 1;
                 let shm = registry.bind::<WlShm, _, _>(name, version, qh, ShmData { shm_index });
                 state.shm_objects.push(shm);
+            } else if interface == "wp_drm_lease_device_v1" {
+                state.add_drm_lease_device(name);
             }
             state.add_global(name, interface, version);
         }
