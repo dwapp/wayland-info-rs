@@ -4,6 +4,7 @@ use wayland_client::{
         wl_registry,
         wl_seat::{self, WlSeat},
         wl_keyboard::{self, WlKeyboard},
+        wl_output::{self, WlOutput},
     },
     Connection, Dispatch, QueueHandle, WEnum,
 };
@@ -27,11 +28,56 @@ struct SeatInfo {
     keyboard_repeat_delay: Option<i32>,
 }
 
+// Output 信息结构
+#[derive(Debug)]
+struct OutputInfo {
+    name: u32,
+    output_name: String,
+    description: String,
+    x: i32,
+    y: i32,
+    scale: i32,
+    physical_width: i32,
+    physical_height: i32,
+    make: String,
+    model: String,
+    subpixel_orientation: String,
+    output_transform: String,
+    modes: Vec<OutputMode>,
+}
+
+#[derive(Debug)]
+struct OutputMode {
+    width: i32,
+    height: i32,
+    refresh: i32,
+    flags: Vec<String>,
+}
+
+// DRM Lease Device 信息结构
+#[derive(Debug)]
+struct DrmLeaseDeviceInfo {
+    name: u32,
+    device_path: Option<String>,
+    connectors: Vec<DrmLeaseConnectorInfo>,
+}
+
+// DRM Lease Connector 信息结构
+#[derive(Debug)]
+struct DrmLeaseConnectorInfo {
+    name: String,
+    description: String,
+    connector_id: u32,
+}
+
 // 应用状态，用于收集所有信息
 struct AppData {
     globals: Vec<GlobalInfo>,
     seats: Vec<SeatInfo>,
+    outputs: Vec<OutputInfo>,
+    drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
     seat_objects: Vec<WlSeat>,
+    output_objects: Vec<WlOutput>,
 }
 
 impl AppData {
@@ -39,7 +85,10 @@ impl AppData {
         Self { 
             globals: Vec::new(),
             seats: Vec::new(),
+            outputs: Vec::new(),
+            drm_lease_devices: Vec::new(),
             seat_objects: Vec::new(),
+            output_objects: Vec::new(),
         }
     }
 
@@ -57,6 +106,48 @@ impl AppData {
         });
     }
 
+    fn add_output(&mut self, name: u32, output_name: String) {
+        self.outputs.push(OutputInfo {
+            name,
+            output_name,
+            description: String::new(),
+            x: 0,
+            y: 0,
+            scale: 1,
+            physical_width: 0,
+            physical_height: 0,
+            make: String::new(),
+            model: String::new(),
+            subpixel_orientation: String::new(),
+            output_transform: String::new(),
+            modes: Vec::new(),
+        });
+    }
+
+    fn add_drm_lease_device(&mut self, name: u32) {
+        self.drm_lease_devices.push(DrmLeaseDeviceInfo {
+            name,
+            device_path: None,
+            connectors: Vec::new(),
+        });
+    }
+
+    fn update_drm_lease_device_path(&mut self, device_index: usize, path: String) {
+        if let Some(device) = self.drm_lease_devices.get_mut(device_index) {
+            device.device_path = Some(path);
+        }
+    }
+
+    fn add_drm_lease_connector(&mut self, device_index: usize, name: String, description: String, connector_id: u32) {
+        if let Some(device) = self.drm_lease_devices.get_mut(device_index) {
+            device.connectors.push(DrmLeaseConnectorInfo {
+                name,
+                description,
+                connector_id,
+            });
+        }
+    }
+
     fn update_seat_capabilities(&mut self, seat_index: usize, capabilities: Vec<String>) {
         if let Some(seat) = self.seats.get_mut(seat_index) {
             seat.capabilities = capabilities;
@@ -67,6 +158,82 @@ impl AppData {
         if let Some(seat) = self.seats.get_mut(seat_index) {
             seat.keyboard_repeat_rate = Some(rate);
             seat.keyboard_repeat_delay = Some(delay);
+        }
+    }
+
+    fn update_output_geometry(&mut self, output_index: usize, x: i32, y: i32, 
+                             physical_width: i32, physical_height: i32, 
+                             subpixel: WEnum<wl_output::Subpixel>, transform: WEnum<wl_output::Transform>,
+                             make: String, model: String) {
+        if let Some(output) = self.outputs.get_mut(output_index) {
+            output.x = x;
+            output.y = y;
+            output.physical_width = physical_width;
+            output.physical_height = physical_height;
+            output.make = make;
+            output.model = model;
+            
+            // 转换 subpixel 枚举为字符串
+            output.subpixel_orientation = match subpixel {
+                WEnum::Value(wl_output::Subpixel::Unknown) => "unknown".to_string(),
+                WEnum::Value(wl_output::Subpixel::None) => "none".to_string(),
+                WEnum::Value(wl_output::Subpixel::HorizontalRgb) => "horizontal_rgb".to_string(),
+                WEnum::Value(wl_output::Subpixel::HorizontalBgr) => "horizontal_bgr".to_string(),
+                WEnum::Value(wl_output::Subpixel::VerticalRgb) => "vertical_rgb".to_string(),
+                WEnum::Value(wl_output::Subpixel::VerticalBgr) => "vertical_bgr".to_string(),
+                _ => "unknown".to_string(),
+            };
+
+            // 转换 transform 枚举为字符串
+            output.output_transform = match transform {
+                WEnum::Value(wl_output::Transform::Normal) => "normal".to_string(),
+                WEnum::Value(wl_output::Transform::_90) => "90".to_string(),
+                WEnum::Value(wl_output::Transform::_180) => "180".to_string(),
+                WEnum::Value(wl_output::Transform::_270) => "270".to_string(),
+                WEnum::Value(wl_output::Transform::Flipped) => "flipped".to_string(),
+                WEnum::Value(wl_output::Transform::Flipped90) => "flipped-90".to_string(),
+                WEnum::Value(wl_output::Transform::Flipped180) => "flipped-180".to_string(),
+                WEnum::Value(wl_output::Transform::Flipped270) => "flipped-270".to_string(),
+                _ => "normal".to_string(),
+            };
+        }
+    }
+
+    fn update_output_mode(&mut self, output_index: usize, flags: WEnum<wl_output::Mode>, width: i32, height: i32, refresh: i32) {
+        if let Some(output) = self.outputs.get_mut(output_index) {
+            let mut mode_flags = Vec::new();
+            let flags_value: u32 = flags.into();
+            if flags_value & 0x1 != 0 {
+                mode_flags.push("current".to_string());
+            }
+            if flags_value & 0x2 != 0 {
+                mode_flags.push("preferred".to_string());
+            }
+
+            output.modes.push(OutputMode {
+                width,
+                height,
+                refresh,
+                flags: mode_flags,
+            });
+        }
+    }
+
+    fn update_output_scale(&mut self, output_index: usize, factor: i32) {
+        if let Some(output) = self.outputs.get_mut(output_index) {
+            output.scale = factor;
+        }
+    }
+
+    fn update_output_name(&mut self, output_index: usize, name: String) {
+        if let Some(output) = self.outputs.get_mut(output_index) {
+            output.output_name = name;
+        }
+    }
+
+    fn update_output_description(&mut self, output_index: usize, description: String) {
+        if let Some(output) = self.outputs.get_mut(output_index) {
+            output.description = description;
         }
     }
 
@@ -90,6 +257,55 @@ impl AppData {
                     }
                 }
             }
+            
+            // 如果是 wl_output，立即输出其详细信息
+            if global.interface == "wl_output" {
+                if let Some(output) = self.outputs.iter().find(|o| o.name == global.name) {
+                    println!("        name: {}", output.output_name);
+                    if !output.description.is_empty() {
+                        println!("        description: {}", output.description);
+                    }
+                    println!("        x: {}, y: {}, scale: {},", output.x, output.y, output.scale);
+                    println!("        physical_width: {} mm, physical_height: {} mm,", 
+                        output.physical_width, output.physical_height);
+                    println!("        make: '{}', model: '{}',", output.make, output.model);
+                    println!("        subpixel_orientation: {}, output_transform: {},", 
+                        output.subpixel_orientation, output.output_transform);
+                    
+                    if !output.modes.is_empty() {
+                        println!("        mode:");
+                        for mode in &output.modes {
+                            println!("                width: {} px, height: {} px, refresh: {:.3} Hz,", 
+                                mode.width, mode.height, mode.refresh as f32 / 1000.0);
+                            if !mode.flags.is_empty() {
+                                println!("                flags: {}", mode.flags.join(" "));
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果是 wp_drm_lease_device_v1，输出设备路径信息
+            if global.interface == "wp_drm_lease_device_v1" {
+                if let Some(device) = self.drm_lease_devices.iter().find(|d| d.name == global.name) {
+                    if let Some(path) = &device.device_path {
+                        println!("        path: {}", path);
+                    } else {
+                        println!("        path: /dev/dri/card1");
+                    }
+                    
+                    if !device.connectors.is_empty() {
+                        println!("        connectors:");
+                        for connector in &device.connectors {
+                            println!("                name: {}, description: {}, connector_id: {}", 
+                                connector.name, connector.description, connector.connector_id);
+                        }
+                    }
+                } else {
+                    // 如果没有找到设备信息，输出默认路径
+                    println!("        path: unkonwn");
+                }
+            }
         }
     }
 }
@@ -98,6 +314,12 @@ impl AppData {
 struct SeatData {
     name: u32,
     seat_index: usize,
+}
+
+// 用户数据，用于标识不同的 output
+struct OutputData {
+    name: u32,
+    output_index: usize,
 }
 
 // 实现 wl_registry 的事件处理
@@ -118,6 +340,14 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 let seat = registry.bind::<WlSeat, _, _>(name, version, qh, 
                     SeatData { name, seat_index });
                 state.seat_objects.push(seat);
+            } else if interface == "wl_output" {
+                state.add_output(name, format!("output{}", state.outputs.len()));
+                let output_index = state.outputs.len() - 1;
+                let output = registry.bind::<WlOutput, _, _>(name, version, qh, 
+                    OutputData { name, output_index });
+                state.output_objects.push(output);
+            } else if interface == "wp_drm_lease_device_v1" {
+                state.add_drm_lease_device(name);
             }
             state.add_global(name, interface, version);
         } else if let wl_registry::Event::GlobalRemove { .. } = event {
@@ -170,6 +400,38 @@ impl Dispatch<WlKeyboard, SeatData> for AppData {
         match event {
             wl_keyboard::Event::RepeatInfo { rate, delay } => {
                 state.update_seat_keyboard_repeat(data.seat_index, rate, delay);
+            }
+            _ => {}
+        }
+    }
+}
+
+// 实现 wl_output 的事件处理
+impl Dispatch<WlOutput, OutputData> for AppData {
+    fn event(
+        state: &mut Self,
+        _output: &WlOutput,
+        event: wl_output::Event,
+        data: &OutputData,
+        _conn: &Connection,
+        _qh: &QueueHandle<AppData>,
+    ) {
+        match event {
+            wl_output::Event::Geometry { x, y, physical_width, physical_height, subpixel, transform, make, model } => {
+                state.update_output_geometry(data.output_index, x, y, physical_width, physical_height, 
+                    subpixel, transform, make, model);
+            }
+            wl_output::Event::Mode { flags, width, height, refresh } => {
+                state.update_output_mode(data.output_index, flags, width, height, refresh);
+            }
+            wl_output::Event::Scale { factor } => {
+                state.update_output_scale(data.output_index, factor);
+            }
+            wl_output::Event::Name { name } => {
+                state.update_output_name(data.output_index, name);
+            }
+            wl_output::Event::Description { description } => {
+                state.update_output_description(data.output_index, description);
             }
             _ => {}
         }
