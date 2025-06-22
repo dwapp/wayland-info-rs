@@ -5,6 +5,7 @@ use wayland_client::{
         wl_seat::{self, WlSeat},
         wl_keyboard::{self, WlKeyboard},
         wl_output::{self, WlOutput},
+        wl_shm::{self, WlShm},
     },
     Connection, Dispatch, QueueHandle, WEnum,
 };
@@ -54,6 +55,19 @@ struct OutputMode {
     flags: Vec<String>,
 }
 
+// SHM 信息结构
+#[derive(Debug)]
+struct ShmInfo {
+    name: u32,
+    formats: Vec<ShmFormat>,
+}
+
+#[derive(Debug)]
+struct ShmFormat {
+    format: u32,
+    fourcc: String,
+}
+
 // DRM Lease Device 信息结构
 #[derive(Debug)]
 struct DrmLeaseDeviceInfo {
@@ -76,8 +90,10 @@ struct AppData {
     seats: Vec<SeatInfo>,
     outputs: Vec<OutputInfo>,
     drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
+    shm_info: Vec<ShmInfo>,
     seat_objects: Vec<WlSeat>,
     output_objects: Vec<WlOutput>,
+    shm_objects: Vec<WlShm>,
 }
 
 impl AppData {
@@ -87,8 +103,10 @@ impl AppData {
             seats: Vec::new(),
             outputs: Vec::new(),
             drm_lease_devices: Vec::new(),
+            shm_info: Vec::new(),
             seat_objects: Vec::new(),
             output_objects: Vec::new(),
+            shm_objects: Vec::new(),
         }
     }
 
@@ -130,6 +148,23 @@ impl AppData {
             device_path: None,
             connectors: Vec::new(),
         });
+    }
+
+    fn add_shm(&mut self, name: u32) {
+        self.shm_info.push(ShmInfo {
+            name,
+            formats: Vec::new(),
+        });
+    }
+
+    fn add_shm_format(&mut self, shm_index: usize, format: u32) {
+        if let Some(shm) = self.shm_info.get_mut(shm_index) {
+            let fourcc = format_to_fourcc(format);
+            shm.formats.push(ShmFormat {
+                format,
+                fourcc,
+            });
+        }
     }
 
     fn update_drm_lease_device_path(&mut self, device_index: usize, path: String) {
@@ -306,6 +341,18 @@ impl AppData {
                     println!("        path: unkonwn");
                 }
             }
+
+            // 如果是 wl_shm，立即输出其详细信息
+            if global.interface == "wl_shm" {
+                if let Some(shm) = self.shm_info.iter().find(|s| s.name == global.name) {
+                    if !shm.formats.is_empty() {
+                        println!("        formats (fourcc):");
+                        for format in &shm.formats {
+                            println!("                {:#010x} = '{}'", format.format, format.fourcc);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -320,6 +367,29 @@ struct SeatData {
 struct OutputData {
     name: u32,
     output_index: usize,
+}
+
+// 用户数据，用于标识不同的 shm
+struct ShmData {
+    name: u32,
+    shm_index: usize,
+}
+
+// 将格式代码转换为 FOURCC 字符串
+fn format_to_fourcc(format: u32) -> String {
+    let bytes = [
+        (format & 0xFF) as u8,
+        ((format >> 8) & 0xFF) as u8,
+        ((format >> 16) & 0xFF) as u8,
+        ((format >> 24) & 0xFF) as u8,
+    ];
+    
+    // 检查是否为可打印字符
+    if bytes.iter().all(|&b| b.is_ascii_graphic()) {
+        String::from_utf8_lossy(&bytes).to_string()
+    } else {
+        format!("{:08x}", format)
+    }
 }
 
 // 实现 wl_registry 的事件处理
@@ -346,6 +416,12 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 let output = registry.bind::<WlOutput, _, _>(name, version, qh, 
                     OutputData { name, output_index });
                 state.output_objects.push(output);
+            } else if interface == "wl_shm" {
+                state.add_shm(name);
+                let shm_index = state.shm_info.len() - 1;
+                let shm = registry.bind::<WlShm, _, _>(name, version, qh, 
+                    ShmData { name, shm_index });
+                state.shm_objects.push(shm);
             } else if interface == "wp_drm_lease_device_v1" {
                 state.add_drm_lease_device(name);
             }
@@ -432,6 +508,26 @@ impl Dispatch<WlOutput, OutputData> for AppData {
             }
             wl_output::Event::Description { description } => {
                 state.update_output_description(data.output_index, description);
+            }
+            _ => {}
+        }
+    }
+}
+
+// 实现 wl_shm 的事件处理
+impl Dispatch<WlShm, ShmData> for AppData {
+    fn event(
+        state: &mut Self,
+        _shm: &WlShm,
+        event: wl_shm::Event,
+        data: &ShmData,
+        _conn: &Connection,
+        _qh: &QueueHandle<AppData>,
+    ) {
+        match event {
+            wl_shm::Event::Format { format } => {
+                let format_value: u32 = format.into();
+                state.add_shm_format(data.shm_index, format_value);
             }
             _ => {}
         }
