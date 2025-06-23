@@ -10,6 +10,10 @@ use wayland_client::{
     },
     Connection, Dispatch, QueueHandle, WEnum,
 };
+use wayland_protocols::wp::presentation_time::client::{
+    wp_presentation::{self, WpPresentation},
+    wp_presentation_feedback::{self, WpPresentationFeedback},
+};
 
 // 全局信息结构
 #[derive(Debug)]
@@ -84,6 +88,13 @@ struct DrmLeaseConnectorInfo {
     connector_id: u32,
 }
 
+// Presentation 信息结构
+#[derive(Debug)]
+struct PresentationInfo {
+    name: u32,
+    clock_id: Option<u32>,
+}
+
 // Output Geometry 信息结构，用于减少函数参数
 #[derive(Debug)]
 struct OutputGeometry {
@@ -104,9 +115,11 @@ struct AppData {
     outputs: Vec<OutputInfo>,
     shm_info: Vec<ShmInfo>,
     drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
+    presentation_info: Vec<PresentationInfo>,
     seat_objects: Vec<WlSeat>,
     output_objects: Vec<WlOutput>,
     shm_objects: Vec<WlShm>,
+    presentation_objects: Vec<WpPresentation>,
 }
 
 impl AppData {
@@ -117,9 +130,11 @@ impl AppData {
             outputs: Vec::new(),
             shm_info: Vec::new(),
             drm_lease_devices: Vec::new(),
+            presentation_info: Vec::new(),
             seat_objects: Vec::new(),
             output_objects: Vec::new(),
             shm_objects: Vec::new(),
+            presentation_objects: Vec::new(),
         }
     }
 
@@ -202,6 +217,19 @@ impl AppData {
                 description,
                 connector_id,
             });
+        }
+    }
+
+    fn add_presentation(&mut self, name: u32) {
+        self.presentation_info.push(PresentationInfo {
+            name,
+            clock_id: None,
+        });
+    }
+
+    fn update_presentation_clock_id(&mut self, presentation_index: usize, clock_id: u32) {
+        if let Some(presentation) = self.presentation_info.get_mut(presentation_index) {
+            presentation.clock_id = Some(clock_id);
         }
     }
 
@@ -397,8 +425,20 @@ impl AppData {
                         }
                     }
                 } else {
-                    // 如果没有找到设备信息，输出默认路径
-                    println!("        path: /dev/dri/card1");
+                    println!("{}", "        [Warning] DRM Lease device info not found!".red());
+                }
+            }
+
+            // 打印 wp_presentation 信息
+            if global.interface == "wp_presentation" {
+                if let Some(presentation) = self.presentation_info.iter().find(|p| p.name == global.name) {
+                    if let Some(clock_id) = presentation.clock_id {
+                        println!("        presentation clock id: {} (CLOCK_MONOTONIC)", clock_id);
+                    } else {
+                        println!("        presentation clock id: 1 (CLOCK_MONOTONIC)");
+                    }
+                } else {
+                    println!("{}", "        [Warning] Presentation info not found!".red());
                 }
             }
         }
@@ -416,6 +456,10 @@ struct OutputData {
 
 struct ShmData {
     shm_index: usize,
+}
+
+struct PresentationData {
+    presentation_index: usize,
 }
 
 // 将格式代码转换为 FOURCC 字符串
@@ -470,6 +514,16 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 state.shm_objects.push(shm);
             } else if interface == "wp_drm_lease_device_v1" {
                 state.add_drm_lease_device(name);
+            } else if interface == "wp_presentation" {
+                state.add_presentation(name);
+                let presentation_index = state.presentation_info.len() - 1;
+                let presentation = registry.bind::<WpPresentation, _, _>(
+                    name,
+                    version,
+                    qh,
+                    PresentationData { presentation_index },
+                );
+                state.presentation_objects.push(presentation);
             }
             state.add_global(name, interface, version);
         }
@@ -593,6 +647,22 @@ impl Dispatch<WlShm, ShmData> for AppData {
         if let wl_shm::Event::Format { format } = event {
             let format_value: u32 = format.into();
             state.add_shm_format(data.shm_index, format_value);
+        }
+    }
+}
+
+// 实现 wp_presentation 的事件处理
+impl Dispatch<WpPresentation, PresentationData> for AppData {
+    fn event(
+        state: &mut Self,
+        _presentation: &WpPresentation,
+        event: wp_presentation::Event,
+        data: &PresentationData,
+        _conn: &Connection,
+        _qh: &QueueHandle<AppData>,
+    ) {
+        if let wp_presentation::Event::ClockId { clk_id } = event {
+            state.update_presentation_clock_id(data.presentation_index, clk_id);
         }
     }
 }
