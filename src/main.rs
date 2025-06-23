@@ -11,6 +11,10 @@ use wayland_client::{
     Connection, Dispatch, QueueHandle, WEnum,
 };
 use wayland_protocols::wp::presentation_time::client::wp_presentation::{self, WpPresentation};
+use wayland_protocols::xdg::xdg_output::zv1::client::{
+    zxdg_output_manager_v1::{self, ZxdgOutputManagerV1},
+    zxdg_output_v1::{self, ZxdgOutputV1},
+};
 
 // 全局信息结构
 #[derive(Debug)]
@@ -92,6 +96,25 @@ struct PresentationInfo {
     clock_id: Option<u32>,
 }
 
+// XDG Output Manager 信息结构
+#[derive(Debug)]
+struct XdgOutputManagerInfo {
+    name: u32,
+    outputs: Vec<XdgOutputInfo>,
+}
+
+// XDG Output 信息结构
+#[derive(Debug)]
+struct XdgOutputInfo {
+    output_id: u32,
+    name: String,
+    description: String,
+    logical_x: i32,
+    logical_y: i32,
+    logical_width: i32,
+    logical_height: i32,
+}
+
 // Output Geometry 信息结构，用于减少函数参数
 #[derive(Debug)]
 struct OutputGeometry {
@@ -113,10 +136,13 @@ struct AppData {
     shm_info: Vec<ShmInfo>,
     drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
     presentation_info: Vec<PresentationInfo>,
+    xdg_output_managers: Vec<XdgOutputManagerInfo>,
     seat_objects: Vec<WlSeat>,
     output_objects: Vec<WlOutput>,
     shm_objects: Vec<WlShm>,
     presentation_objects: Vec<WpPresentation>,
+    xdg_output_manager_objects: Vec<ZxdgOutputManagerV1>,
+    xdg_output_objects: Vec<ZxdgOutputV1>,
 }
 
 impl AppData {
@@ -128,10 +154,13 @@ impl AppData {
             shm_info: Vec::new(),
             drm_lease_devices: Vec::new(),
             presentation_info: Vec::new(),
+            xdg_output_managers: Vec::new(),
             seat_objects: Vec::new(),
             output_objects: Vec::new(),
             shm_objects: Vec::new(),
             presentation_objects: Vec::new(),
+            xdg_output_manager_objects: Vec::new(),
+            xdg_output_objects: Vec::new(),
         }
     }
 
@@ -323,6 +352,78 @@ impl AppData {
         }
     }
 
+    fn add_xdg_output_manager(&mut self, name: u32) {
+        self.xdg_output_managers.push(XdgOutputManagerInfo {
+            name,
+            outputs: Vec::new(),
+        });
+    }
+
+    fn add_xdg_output(&mut self, manager_index: usize, output_id: u32) {
+        if let Some(manager) = self.xdg_output_managers.get_mut(manager_index) {
+            manager.outputs.push(XdgOutputInfo {
+                output_id,
+                name: String::new(),
+                description: String::new(),
+                logical_x: 0,
+                logical_y: 0,
+                logical_width: 0,
+                logical_height: 0,
+            });
+        }
+    }
+
+    fn update_xdg_output_name(&mut self, manager_index: usize, output_index: usize, name: String) {
+        if let Some(manager) = self.xdg_output_managers.get_mut(manager_index) {
+            if let Some(output) = manager.outputs.get_mut(output_index) {
+                output.name = name;
+            }
+        }
+    }
+
+    fn update_xdg_output_description(
+        &mut self,
+        manager_index: usize,
+        output_index: usize,
+        description: String,
+    ) {
+        if let Some(manager) = self.xdg_output_managers.get_mut(manager_index) {
+            if let Some(output) = manager.outputs.get_mut(output_index) {
+                output.description = description;
+            }
+        }
+    }
+
+    fn update_xdg_output_logical_position(
+        &mut self,
+        manager_index: usize,
+        output_index: usize,
+        x: i32,
+        y: i32,
+    ) {
+        if let Some(manager) = self.xdg_output_managers.get_mut(manager_index) {
+            if let Some(output) = manager.outputs.get_mut(output_index) {
+                output.logical_x = x;
+                output.logical_y = y;
+            }
+        }
+    }
+
+    fn update_xdg_output_logical_size(
+        &mut self,
+        manager_index: usize,
+        output_index: usize,
+        width: i32,
+        height: i32,
+    ) {
+        if let Some(manager) = self.xdg_output_managers.get_mut(manager_index) {
+            if let Some(output) = manager.outputs.get_mut(output_index) {
+                output.logical_width = width;
+                output.logical_height = height;
+            }
+        }
+    }
+
     fn print_all_info(&self) {
         println!("{}", "Wayland Global Interfaces:".bold().blue());
         for global in &self.globals {
@@ -448,25 +549,57 @@ impl AppData {
                     println!("{}", "        [Warning] Presentation info not found!".red());
                 }
             }
+
+            // 打印 zxdg_output_manager_v1 信息
+            if global.interface == "zxdg_output_manager_v1" {
+                if let Some(manager) = self
+                    .xdg_output_managers
+                    .iter()
+                    .find(|m| m.name == global.name)
+                {
+                    for output in &manager.outputs {
+                        println!("        xdg_output_v1");
+                        println!("                output: {}", output.output_id);
+                        println!("                name: '{}'", output.name);
+                        println!("                description: '{}'", output.description);
+                        println!(
+                            "                logical_x: {}, logical_y: {}",
+                            output.logical_x, output.logical_y
+                        );
+                        println!(
+                            "                logical_width: {}, logical_height: {}",
+                            output.logical_width, output.logical_height
+                        );
+                    }
+                }
+            }
         }
     }
 }
 
-// 事件数据结构，移除未使用的 name 字段
-struct SeatData {
-    seat_index: usize,
-}
-
-struct OutputData {
-    output_index: usize,
-}
-
-struct ShmData {
-    shm_index: usize,
-}
-
-struct PresentationData {
-    presentation_index: usize,
+// 通用用户数据类型
+#[derive(Debug)]
+#[allow(dead_code)]
+enum UserData {
+    Seat {
+        seat_index: usize,
+    },
+    Output {
+        output_index: usize,
+    },
+    Shm {
+        shm_index: usize,
+    },
+    Presentation {
+        presentation_index: usize,
+    },
+    XdgOutputManager {
+        manager_index: usize,
+    },
+    XdgOutput {
+        manager_index: usize,
+        output_index: usize,
+    },
 }
 
 // 将格式代码转换为 FOURCC 字符串
@@ -506,18 +639,23 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 state.add_seat(name, format!("seat{}", state.seats.len()));
                 let seat_index = state.seats.len() - 1;
                 let seat =
-                    registry.bind::<WlSeat, _, _>(name, version, qh, SeatData { seat_index });
+                    registry.bind::<WlSeat, _, _>(name, version, qh, UserData::Seat { seat_index });
                 state.seat_objects.push(seat);
             } else if interface == "wl_output" {
                 state.add_output(name, format!("output{}", state.outputs.len()));
                 let output_index = state.outputs.len() - 1;
-                let output =
-                    registry.bind::<WlOutput, _, _>(name, version, qh, OutputData { output_index });
+                let output = registry.bind::<WlOutput, _, _>(
+                    name,
+                    version,
+                    qh,
+                    UserData::Output { output_index },
+                );
                 state.output_objects.push(output);
             } else if interface == "wl_shm" {
                 state.add_shm(name);
                 let shm_index = state.shm_info.len() - 1;
-                let shm = registry.bind::<WlShm, _, _>(name, version, qh, ShmData { shm_index });
+                let shm =
+                    registry.bind::<WlShm, _, _>(name, version, qh, UserData::Shm { shm_index });
                 state.shm_objects.push(shm);
             } else if interface == "wp_drm_lease_device_v1" {
                 state.add_drm_lease_device(name);
@@ -528,9 +666,19 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                     name,
                     version,
                     qh,
-                    PresentationData { presentation_index },
+                    UserData::Presentation { presentation_index },
                 );
                 state.presentation_objects.push(presentation);
+            } else if interface == "zxdg_output_manager_v1" {
+                state.add_xdg_output_manager(name);
+                let manager_index = state.xdg_output_managers.len() - 1;
+                let manager = registry.bind::<ZxdgOutputManagerV1, _, _>(
+                    name,
+                    version,
+                    qh,
+                    UserData::XdgOutputManager { manager_index },
+                );
+                state.xdg_output_manager_objects.push(manager);
             }
             state.add_global(name, interface, version);
         }
@@ -538,76 +686,73 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
 }
 
 // 实现 wl_seat 的事件处理
-impl Dispatch<WlSeat, SeatData> for AppData {
+impl Dispatch<WlSeat, UserData> for AppData {
     fn event(
         state: &mut Self,
         _seat: &WlSeat,
         event: wl_seat::Event,
-        data: &SeatData,
+        data: &UserData,
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
-        match event {
-            wl_seat::Event::Name { name } => {
-                if let Some(seat) = state.seats.get_mut(data.seat_index) {
-                    seat.seat_name = name;
-                }
-            }
-            wl_seat::Event::Capabilities { capabilities } => {
-                let mut caps = Vec::new();
-                match capabilities {
-                    WEnum::Value(wl_seat::Capability::Pointer) => caps.push("pointer".to_string()),
-                    WEnum::Value(wl_seat::Capability::Keyboard) => {
-                        caps.push("keyboard".to_string())
+        if let UserData::Seat { seat_index } = data {
+            match event {
+                wl_seat::Event::Name { name } => {
+                    if let Some(seat) = state.seats.get_mut(*seat_index) {
+                        seat.seat_name = name;
                     }
-                    WEnum::Value(wl_seat::Capability::Touch) => caps.push("touch".to_string()),
-                    _ => {}
                 }
-                state.update_seat_capabilities(data.seat_index, caps);
+                wl_seat::Event::Capabilities { capabilities } => {
+                    let mut caps = Vec::new();
+                    match capabilities {
+                        WEnum::Value(wl_seat::Capability::Pointer) => {
+                            caps.push("pointer".to_string())
+                        }
+                        WEnum::Value(wl_seat::Capability::Keyboard) => {
+                            caps.push("keyboard".to_string())
+                        }
+                        WEnum::Value(wl_seat::Capability::Touch) => caps.push("touch".to_string()),
+                        _ => {}
+                    }
+                    state.update_seat_capabilities(*seat_index, caps);
+                }
+                _ => {}
             }
-            _ => {}
         }
     }
 }
 
 // 实现 wl_keyboard 的事件处理
-impl Dispatch<WlKeyboard, SeatData> for AppData {
+impl Dispatch<WlKeyboard, UserData> for AppData {
     fn event(
         state: &mut Self,
         _keyboard: &WlKeyboard,
         event: wl_keyboard::Event,
-        data: &SeatData,
+        data: &UserData,
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
-        if let wl_keyboard::Event::RepeatInfo { rate, delay } = event {
-            state.update_seat_keyboard_repeat(data.seat_index, rate, delay);
+        if let UserData::Seat { seat_index } = data {
+            if let wl_keyboard::Event::RepeatInfo { rate, delay } = event {
+                state.update_seat_keyboard_repeat(*seat_index, rate, delay);
+            }
         }
     }
 }
 
 // 实现 wl_output 的事件处理
-impl Dispatch<WlOutput, OutputData> for AppData {
+impl Dispatch<WlOutput, UserData> for AppData {
     fn event(
         state: &mut Self,
         _output: &WlOutput,
         event: wl_output::Event,
-        data: &OutputData,
+        data: &UserData,
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
-        match event {
-            wl_output::Event::Geometry {
-                x,
-                y,
-                physical_width,
-                physical_height,
-                subpixel,
-                transform,
-                make,
-                model,
-            } => {
-                let geometry = OutputGeometry {
+        if let UserData::Output { output_index } = data {
+            match event {
+                wl_output::Event::Geometry {
                     x,
                     y,
                     physical_width,
@@ -616,60 +761,131 @@ impl Dispatch<WlOutput, OutputData> for AppData {
                     transform,
                     make,
                     model,
-                };
-                state.update_output_geometry(data.output_index, geometry);
+                } => {
+                    let geometry = OutputGeometry {
+                        x,
+                        y,
+                        physical_width,
+                        physical_height,
+                        subpixel,
+                        transform,
+                        make,
+                        model,
+                    };
+                    state.update_output_geometry(*output_index, geometry);
+                }
+                wl_output::Event::Mode {
+                    flags,
+                    width,
+                    height,
+                    refresh,
+                } => {
+                    state.update_output_mode(*output_index, flags, width, height, refresh);
+                }
+                wl_output::Event::Scale { factor } => {
+                    state.update_output_scale(*output_index, factor);
+                }
+                wl_output::Event::Name { name } => {
+                    state.update_output_name(*output_index, name);
+                }
+                wl_output::Event::Description { description } => {
+                    state.update_output_description(*output_index, description);
+                }
+                _ => {}
             }
-            wl_output::Event::Mode {
-                flags,
-                width,
-                height,
-                refresh,
-            } => {
-                state.update_output_mode(data.output_index, flags, width, height, refresh);
-            }
-            wl_output::Event::Scale { factor } => {
-                state.update_output_scale(data.output_index, factor);
-            }
-            wl_output::Event::Name { name } => {
-                state.update_output_name(data.output_index, name);
-            }
-            wl_output::Event::Description { description } => {
-                state.update_output_description(data.output_index, description);
-            }
-            _ => {}
         }
     }
 }
 
 // 实现 wl_shm 的事件处理
-impl Dispatch<WlShm, ShmData> for AppData {
+impl Dispatch<WlShm, UserData> for AppData {
     fn event(
         state: &mut Self,
         _shm: &WlShm,
         event: wl_shm::Event,
-        data: &ShmData,
+        data: &UserData,
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
-        if let wl_shm::Event::Format { format } = event {
-            let format_value: u32 = format.into();
-            state.add_shm_format(data.shm_index, format_value);
+        if let UserData::Shm { shm_index } = data {
+            if let wl_shm::Event::Format { format } = event {
+                let format_value: u32 = format.into();
+                state.add_shm_format(*shm_index, format_value);
+            }
         }
     }
 }
 
 // 实现 wp_presentation 的事件处理
-impl Dispatch<WpPresentation, PresentationData> for AppData {
+impl Dispatch<WpPresentation, UserData> for AppData {
     fn event(
         state: &mut Self,
         _presentation: &WpPresentation,
         event: wp_presentation::Event,
-        data: &PresentationData,
+        data: &UserData,
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
-        if let wp_presentation::Event::ClockId { clk_id } = event {
-            state.update_presentation_clock_id(data.presentation_index, clk_id);
+        if let UserData::Presentation { presentation_index } = data {
+            if let wp_presentation::Event::ClockId { clk_id } = event {
+                state.update_presentation_clock_id(*presentation_index, clk_id);
+            }
+        }
+    }
+}
+
+// 实现 zxdg_output_manager_v1 的事件处理
+impl Dispatch<ZxdgOutputManagerV1, UserData> for AppData {
+    fn event(
+        _state: &mut Self,
+        _manager: &ZxdgOutputManagerV1,
+        _event: zxdg_output_manager_v1::Event,
+        _data: &UserData,
+        _conn: &Connection,
+        _qh: &QueueHandle<AppData>,
+    ) {
+        // xdg_output objects are already created during binding
+    }
+}
+
+// 实现 zxdg_output_v1 的事件处理
+impl Dispatch<ZxdgOutputV1, UserData> for AppData {
+    fn event(
+        state: &mut Self,
+        _output: &ZxdgOutputV1,
+        event: zxdg_output_v1::Event,
+        data: &UserData,
+        _conn: &Connection,
+        _qh: &QueueHandle<AppData>,
+    ) {
+        if let UserData::XdgOutput {
+            manager_index,
+            output_index,
+        } = data
+        {
+            match event {
+                zxdg_output_v1::Event::Name { name } => {
+                    state.update_xdg_output_name(*manager_index, *output_index, name);
+                }
+                zxdg_output_v1::Event::Description { description } => {
+                    state.update_xdg_output_description(*manager_index, *output_index, description);
+                }
+                zxdg_output_v1::Event::LogicalPosition { x, y } => {
+                    state.update_xdg_output_logical_position(*manager_index, *output_index, x, y);
+                }
+                zxdg_output_v1::Event::LogicalSize { width, height } => {
+                    state.update_xdg_output_logical_size(
+                        *manager_index,
+                        *output_index,
+                        width,
+                        height,
+                    );
+                }
+                zxdg_output_v1::Event::Done => {
+                    // Output is done, no specific action needed
+                }
+                _ => {}
+            }
         }
     }
 }
@@ -700,11 +916,50 @@ fn main() {
     // 执行 roundtrip 来收集所有全局对象信息
     event_queue.roundtrip(&mut app_data).unwrap();
 
+    // 为每个 zxdg_output_manager_v1 创建对应的 xdg_output 对象
+    let managers: Vec<_> = app_data.xdg_output_manager_objects.drain(..).collect();
+    let outputs: Vec<_> = app_data.output_objects.drain(..).collect();
+
+    let mut xdg_output_objects = Vec::new();
+    let mut xdg_output_infos = vec![Vec::new(); managers.len()];
+
+    for (manager_index, manager) in managers.iter().enumerate() {
+        for (output_index, output) in outputs.iter().enumerate() {
+            let xdg_output = manager.get_xdg_output(
+                output,
+                &qh,
+                UserData::XdgOutput {
+                    manager_index,
+                    output_index,
+                },
+            );
+            xdg_output_objects.push(xdg_output);
+            xdg_output_infos[manager_index].push(output_index as u32);
+        }
+    }
+
+    // 放回 app_data
+    app_data.xdg_output_manager_objects = managers;
+    app_data.output_objects = outputs;
+    app_data.xdg_output_objects = xdg_output_objects;
+
+    // 更新 manager 的输出信息
+    for (manager_index, output_ids) in xdg_output_infos.into_iter().enumerate() {
+        for output_id in output_ids {
+            app_data.add_xdg_output(manager_index, output_id);
+        }
+    }
+
     // 为每个 seat 绑定键盘以获取重复信息
     let seat_objects: Vec<_> = app_data.seat_objects.drain(..).collect();
     for (index, seat) in seat_objects.iter().enumerate() {
-        let seat_data = SeatData { seat_index: index };
+        let seat_data = UserData::Seat { seat_index: index };
         let _keyboard = seat.get_keyboard(&qh, seat_data);
+        event_queue.roundtrip(&mut app_data).unwrap();
+    }
+
+    // 多次 roundtrip 确保 xdg_output 事件能被处理
+    for _ in 0..5 {
         event_queue.roundtrip(&mut app_data).unwrap();
     }
 
