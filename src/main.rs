@@ -10,10 +10,7 @@ use wayland_client::{
     },
     Connection, Dispatch, QueueHandle, WEnum,
 };
-use wayland_protocols::wp::presentation_time::client::{
-    wp_presentation::{self, WpPresentation},
-    wp_presentation_feedback::{self, WpPresentationFeedback},
-};
+use wayland_protocols::wp::presentation_time::client::wp_presentation::{self, WpPresentation};
 
 // 全局信息结构
 #[derive(Debug)]
@@ -425,15 +422,25 @@ impl AppData {
                         }
                     }
                 } else {
-                    println!("{}", "        [Warning] DRM Lease device info not found!".red());
+                    println!(
+                        "{}",
+                        "        [Warning] DRM Lease device info not found!".red()
+                    );
                 }
             }
 
             // 打印 wp_presentation 信息
             if global.interface == "wp_presentation" {
-                if let Some(presentation) = self.presentation_info.iter().find(|p| p.name == global.name) {
+                if let Some(presentation) = self
+                    .presentation_info
+                    .iter()
+                    .find(|p| p.name == global.name)
+                {
                     if let Some(clock_id) = presentation.clock_id {
-                        println!("        presentation clock id: {} (CLOCK_MONOTONIC)", clock_id);
+                        println!(
+                            "        presentation clock id: {} (CLOCK_MONOTONIC)",
+                            clock_id
+                        );
                     } else {
                         println!("        presentation clock id: 1 (CLOCK_MONOTONIC)");
                     }
