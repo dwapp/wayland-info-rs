@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 colored = "3.0.0"
 wayland-client = "0.31.7"
-wayland-protocols = { version = "0.32.9", features = ["staging", "unstable", "client"] }
+wayland-protocols = { version = "0.32.10", features = ["staging", "unstable", "client"] }
