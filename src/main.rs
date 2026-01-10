@@ -1,5 +1,7 @@
 use colored::Colorize;
+use serde::Serialize;
 use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
 use wayland_client::{
     protocol::{
         wl_keyboard::{self, WlKeyboard},
@@ -17,16 +19,20 @@ use wayland_protocols::xdg::xdg_output::zv1::client::{
 };
 
 // 全局信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct GlobalInfo {
+    #[serde(skip_serializing)]
     name: u32,
     interface: String,
     version: u32,
 }
 
 // Seat 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct SeatInfo {
+    #[serde(skip_serializing)]
     name: u32,
     seat_name: String,
     capabilities: Vec<String>,
@@ -35,8 +41,10 @@ struct SeatInfo {
 }
 
 // Output 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct OutputInfo {
+    #[serde(skip_serializing)]
     name: u32,
     output_name: String,
     description: String,
@@ -52,7 +60,8 @@ struct OutputInfo {
     modes: Vec<OutputMode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct OutputMode {
     width: i32,
     height: i32,
@@ -61,28 +70,34 @@ struct OutputMode {
 }
 
 // SHM 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ShmInfo {
+    #[serde(skip_serializing)]
     name: u32,
     formats: Vec<ShmFormat>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct ShmFormat {
     format: u32,
     fourcc: String,
 }
 
 // DRM Lease Device 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DrmLeaseDeviceInfo {
+    #[serde(skip_serializing)]
     name: u32,
     device_path: Option<String>,
     connectors: Vec<DrmLeaseConnectorInfo>,
 }
 
 // DRM Lease Connector 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DrmLeaseConnectorInfo {
     name: String,
     description: String,
@@ -90,22 +105,28 @@ struct DrmLeaseConnectorInfo {
 }
 
 // Presentation 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct PresentationInfo {
+    #[serde(skip_serializing)]
     name: u32,
     clock_id: Option<u32>,
 }
 
 // XDG Output Manager 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct XdgOutputManagerInfo {
+    #[serde(skip_serializing)]
     name: u32,
     outputs: Vec<XdgOutputInfo>,
 }
 
 // XDG Output 信息结构
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 struct XdgOutputInfo {
+    #[serde(skip_serializing)]
     output_id: u32,
     name: String,
     description: String,
@@ -143,6 +164,33 @@ struct AppData {
     presentation_objects: Vec<WpPresentation>,
     xdg_output_manager_objects: Vec<ZxdgOutputManagerV1>,
     xdg_output_objects: Vec<ZxdgOutputV1>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonOutput {
+    generation_timestamp: u64,
+    globals: Vec<GlobalInfo>,
+    seats: Vec<SeatInfo>,
+    outputs: Vec<OutputInfo>,
+    shm_info: Vec<ShmInfo>,
+    drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
+    presentation_info: Vec<PresentationInfo>,
+    xdg_output_managers: Vec<XdgOutputManagerInfo>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsonOutputBasic {
+    generation_timestamp: u64,
+    globals: Vec<GlobalSummary>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GlobalSummary {
+    interface: String,
+    version: u32,
 }
 
 impl AppData {
@@ -424,6 +472,45 @@ impl AppData {
         }
     }
 
+    fn to_json_output(&self) -> JsonOutput {
+        let timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        JsonOutput {
+            generation_timestamp: timestamp_ms,
+            globals: self.globals.clone(),
+            seats: self.seats.clone(),
+            outputs: self.outputs.clone(),
+            shm_info: self.shm_info.clone(),
+            drm_lease_devices: self.drm_lease_devices.clone(),
+            presentation_info: self.presentation_info.clone(),
+            xdg_output_managers: self.xdg_output_managers.clone(),
+        }
+    }
+
+    fn to_json_basic(&self) -> JsonOutputBasic {
+        let timestamp_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        let globals = self
+            .globals
+            .iter()
+            .map(|g| GlobalSummary {
+                interface: g.interface.clone(),
+                version: g.version,
+            })
+            .collect();
+
+        JsonOutputBasic {
+            generation_timestamp: timestamp_ms,
+            globals,
+        }
+    }
+
     fn print_all_info(&self) {
         println!("{}", "Wayland Global Interfaces:".bold().blue());
         for global in &self.globals {
@@ -573,6 +660,18 @@ impl AppData {
                     }
                 }
             }
+        }
+    }
+
+    fn print_basic_info(&self) {
+        println!("{}", "Wayland Global Interfaces:".bold().blue());
+        for global in &self.globals {
+            println!(
+                "name: {:<4} interface: {:<45} version: {}",
+                global.name,
+                global.interface.blue(),
+                global.version.to_string().yellow()
+            );
         }
     }
 }
@@ -890,7 +989,29 @@ impl Dispatch<ZxdgOutputV1, UserData> for AppData {
     }
 }
 
+fn print_help() {
+    println!("wayland-info-rs options:");
+    println!("    --json   Output JSON (skip detailed protocol data unless --full is also set)");
+    println!("    --full   Include detailed protocol data (seats, outputs, shm, etc.)");
+    println!("    --help   Show this help");
+}
+
 fn main() {
+    let mut json_output = false;
+    let mut full_output = false;
+
+    for arg in env::args().skip(1) {
+        match arg.as_str() {
+            "--json" => json_output = true,
+            "--full" => full_output = true,
+            "--help" | "-h" => {
+                print_help();
+                return;
+            }
+            _ => {}
+        }
+    }
+
     if env::var("WAYLAND_DISPLAY").is_err() {
         env::set_var("WAYLAND_DISPLAY", "wayland-0");
         eprintln!(
@@ -964,5 +1085,17 @@ fn main() {
     }
 
     // 统一输出所有信息
-    app_data.print_all_info();
+    if json_output {
+        if full_output {
+            let json_payload = app_data.to_json_output();
+            println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
+        } else {
+            let json_payload = app_data.to_json_basic();
+            println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
+        }
+    } else if full_output {
+        app_data.print_all_info();
+    } else {
+        app_data.print_basic_info();
+    }
 }
