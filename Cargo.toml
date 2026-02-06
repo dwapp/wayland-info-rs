@@ -2,6 +2,12 @@
 name = "wayland-info-rs"
 version = "0.1.0"
 edition = "2021"
+description = "A Rust implementation of wayland-info for inspecting Wayland compositor globals and protocol capabilities."
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/dwapp/wayland-info-rs"
+homepage = "https://github.com/dwapp/wayland-info-rs"
+documentation = "https://docs.rs/wayland-info-rs"
 
 [dependencies]
 colored = "3.0.0"
