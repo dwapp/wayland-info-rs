@@ -16,6 +16,7 @@ By default it prints detailed protocol information.
 --json    Output JSON
 --full    Include detailed protocol data (default)
 --simple  Hide detailed protocol data
+--sort    Sort globals by interface (omit name field)
 --help    Show help
 ```
 
@@ -43,6 +44,12 @@ JSON output (simple):
 
 ```bash
 wayland-info-rs --json --simple
+```
+
+Sorted output without name field:
+
+```bash
+wayland-info-rs --sort
 ```
 
 ## Environment

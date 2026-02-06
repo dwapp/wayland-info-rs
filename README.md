@@ -28,4 +28,4 @@ See `USAGE.md` for options and examples.
 
 ## License
 
-This project is licensed under the same terms as the original `wayland-info` project.
+MIT

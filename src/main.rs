@@ -472,15 +472,20 @@ impl AppData {
         }
     }
 
-    fn to_json_output(&self) -> JsonOutput {
+    fn to_json_output(&self, sort_output: bool) -> JsonOutput {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
 
+        let mut globals = self.globals.clone();
+        if sort_output {
+            globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+        }
+
         JsonOutput {
             generation_timestamp: timestamp_ms,
-            globals: self.globals.clone(),
+            globals,
             seats: self.seats.clone(),
             outputs: self.outputs.clone(),
             shm_info: self.shm_info.clone(),
@@ -490,13 +495,13 @@ impl AppData {
         }
     }
 
-    fn to_json_basic(&self) -> JsonOutputBasic {
+    fn to_json_basic(&self, sort_output: bool) -> JsonOutputBasic {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
 
-        let globals = self
+        let mut globals: Vec<GlobalSummary> = self
             .globals
             .iter()
             .map(|g| GlobalSummary {
@@ -504,6 +509,9 @@ impl AppData {
                 version: g.version,
             })
             .collect();
+        if sort_output {
+            globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+        }
 
         JsonOutputBasic {
             generation_timestamp: timestamp_ms,
@@ -511,16 +519,28 @@ impl AppData {
         }
     }
 
-    fn print_all_info(&self) {
+    fn print_all_info(&self, sort_output: bool) {
         println!("{}", "Wayland Global Interfaces:".bold().blue());
-        for global in &self.globals {
+        let mut globals: Vec<&GlobalInfo> = self.globals.iter().collect();
+        if sort_output {
+            globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+        }
+        for global in globals {
             // 接口类型用蓝色
-            println!(
-                "name: {:<4} interface: {:<45} version: {}",
-                global.name,
-                global.interface.blue(),
-                global.version.to_string().yellow()
-            );
+            if sort_output {
+                println!(
+                    "interface: {:<45} version: {}",
+                    global.interface.blue(),
+                    global.version.to_string().yellow()
+                );
+            } else {
+                println!(
+                    "name: {:<4} interface: {:<45} version: {}",
+                    global.name,
+                    global.interface.blue(),
+                    global.version.to_string().yellow()
+                );
+            }
 
             // 打印 seat 信息
             if global.interface == "wl_seat" {
@@ -663,15 +683,27 @@ impl AppData {
         }
     }
 
-    fn print_basic_info(&self) {
+    fn print_basic_info(&self, sort_output: bool) {
         println!("{}", "Wayland Global Interfaces:".bold().blue());
-        for global in &self.globals {
-            println!(
-                "name: {:<4} interface: {:<45} version: {}",
-                global.name,
-                global.interface.blue(),
-                global.version.to_string().yellow()
-            );
+        let mut globals: Vec<&GlobalInfo> = self.globals.iter().collect();
+        if sort_output {
+            globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+        }
+        for global in globals {
+            if sort_output {
+                println!(
+                    "interface: {:<45} version: {}",
+                    global.interface.blue(),
+                    global.version.to_string().yellow()
+                );
+            } else {
+                println!(
+                    "name: {:<4} interface: {:<45} version: {}",
+                    global.name,
+                    global.interface.blue(),
+                    global.version.to_string().yellow()
+                );
+            }
         }
     }
 }
@@ -994,18 +1026,21 @@ fn print_help() {
     println!("    --json    Output JSON");
     println!("    --simple  Hide detailed protocol data (seats, outputs, shm, etc.)");
     println!("    --full    Include detailed protocol data (default)");
+    println!("    --sort    Sort globals by interface (omit name field)");
     println!("    --help   Show this help");
 }
 
 fn main() {
     let mut json_output = false;
     let mut full_output = true;
+    let mut sort_output = false;
 
     for arg in env::args().skip(1) {
         match arg.as_str() {
             "--json" => json_output = true,
             "--full" => full_output = true,
             "--simple" => full_output = false,
+            "--sort" => sort_output = true,
             "--help" | "-h" => {
                 print_help();
                 return;
@@ -1089,15 +1124,15 @@ fn main() {
     // 统一输出所有信息
     if json_output {
         if full_output {
-            let json_payload = app_data.to_json_output();
+            let json_payload = app_data.to_json_output(sort_output);
             println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
         } else {
-            let json_payload = app_data.to_json_basic();
+            let json_payload = app_data.to_json_basic(sort_output);
             println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
         }
     } else if full_output {
-        app_data.print_all_info();
+        app_data.print_all_info(sort_output);
     } else {
-        app_data.print_basic_info();
+        app_data.print_basic_info(sort_output);
     }
 }
