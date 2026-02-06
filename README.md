@@ -7,7 +7,7 @@ A Rust implementation of `wayland-info` for inspecting Wayland compositor global
 ### Build from source
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/dwapp/wayland-info-rs
 cd wayland-info-rs
 cargo build --release
 ```
