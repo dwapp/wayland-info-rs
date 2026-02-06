@@ -1,0 +1,22 @@
+# Copilot Instructions for wayland-info-rs
+
+- Purpose: Rust CLI that mirrors `wayland-info`, connects to a Wayland compositor, records globals and prints a structured, colorized summary. Core logic lives in [src/main.rs](src/main.rs).
+- Data model: All collected state is centralized in `AppData` (globals, seats, outputs, shm, DRM lease devices, presentation, xdg outputs) with dedicated add/update helpers to mutate vectors safely; see [src/main.rs](src/main.rs#L21) and [src/main.rs](src/main.rs#L132).
+- Output policy: Event handlers should only write to `AppData`; all user-facing output is deferred to `print_all_info` to preserve ordering and indentation conventions in [src/main.rs](src/main.rs#L427-L564).
+- Registry binding pattern: `Dispatch<wl_registry>` creates objects and stores them alongside their indices in `UserData`, avoiding direct prints in the handler; reference [src/main.rs](src/main.rs#L623-L687).
+- Seat handling: Capabilities and repeat info are captured via `Dispatch<WlSeat>` and `Dispatch<WlKeyboard>` flows, keyed by the `UserData::Seat` index; see [src/main.rs](src/main.rs#L689-L738).
+- Output handling: Geometry, modes, scale, name/description events are mapped into structured `OutputInfo` via `Dispatch<WlOutput>`; see [src/main.rs](src/main.rs#L744-L800). XDG logical geometry is handled through `Dispatch<ZxdgOutputV1>`; see [src/main.rs](src/main.rs#L852-L888).
+- Other protocols: Shared memory formats (`Dispatch<WlShm`]), presentation clock id, and DRM lease placeholders are captured in [src/main.rs](src/main.rs#L801-L851).
+- Rendering details: Colorization uses the `colored` crate; interface names blue, output names yellow, seat names green, warnings red; follow the formatting already defined in [src/main.rs](src/main.rs#L427-L564).
+- FOURCC helper: Convert `wl_shm` format codes via `format_to_fourcc` before storing; see [src/main.rs](src/main.rs#L606-L620).
+- Main loop shape: `main` sets a default `WAYLAND_DISPLAY` if missing, connects, does an initial roundtrip to populate globals, binds xdg outputs after globals are known, attaches keyboards to seats for repeat info, performs multiple roundtrips to flush events, then prints once; flow in [src/main.rs](src/main.rs#L893-L967).
+- When adding a new Wayland interface: add storage fields to `AppData`, extend `UserData` to carry indices, bind in the registry dispatch, implement a `Dispatch<…>` that only updates `AppData`, and extend `print_all_info` for ordered output.
+- Keep output deterministic: avoid printing inside event handlers; store data and rely on the final aggregation.
+- Preferred commands: `cargo check` for quick validation, `cargo run` to exercise against a compositor, `cargo build --release` for distribution. Requires a Wayland session and access to the compositor socket.
+- Environment: `WAYLAND_DISPLAY` defaults to `wayland-0` if unset; override as needed when connecting to non-default displays.
+- Dependencies: versions pinned in [Cargo.toml](Cargo.toml) (wayland-client 0.31, wayland-protocols 0.32 with staging/unstable client features, colored 3.0). If adding protocol crates, match these versions/features.
+- Testing: No automated tests; rely on `cargo check` and runtime runs. Consider adding integration tests that mock Wayland when introducing new behavior.
+- Logging/debugging: Currently uses stderr for the `WAYLAND_DISPLAY` warning and stdout for all reports; prefer maintaining this split to keep output parsable.
+- Output ordering expectations: Globals are printed in registry discovery order, with detailed blocks immediately following their global line; preserve this when extending `print_all_info`.
+- Rounding behaviour: Multiple `roundtrip` calls are intentional to ensure late protocol events (notably xdg outputs) are flushed; avoid removing unless you replace with equivalent synchronization.
+- Styling: Keep strings ASCII; existing code uses plain text labels without special characters.

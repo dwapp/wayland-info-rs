@@ -17,9 +17,6 @@ use wayland_protocols::xdg::xdg_output::zv1::client::{
     zxdg_output_manager_v1::{self, ZxdgOutputManagerV1},
     zxdg_output_v1::{self, ZxdgOutputV1},
 };
-use wayland_protocols_treeland::output_manager::v1::client::treeland_output_manager_v1::{
-    self, TreelandOutputManagerV1,
-};
 
 // 全局信息结构
 #[derive(Debug, Clone, Serialize)]
@@ -116,15 +113,6 @@ struct PresentationInfo {
     clock_id: Option<u32>,
 }
 
-// Treeland Output Manager 信息结构
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TreelandOutputManagerInfo {
-    #[serde(skip_serializing)]
-    name: u32,
-    primary_output: Option<String>,
-}
-
 // XDG Output Manager 信息结构
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -169,13 +157,11 @@ struct AppData {
     shm_info: Vec<ShmInfo>,
     drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
     presentation_info: Vec<PresentationInfo>,
-    treeland_output_managers: Vec<TreelandOutputManagerInfo>,
     xdg_output_managers: Vec<XdgOutputManagerInfo>,
     seat_objects: Vec<WlSeat>,
     output_objects: Vec<WlOutput>,
     shm_objects: Vec<WlShm>,
     presentation_objects: Vec<WpPresentation>,
-    treeland_output_manager_objects: Vec<TreelandOutputManagerV1>,
     xdg_output_manager_objects: Vec<ZxdgOutputManagerV1>,
     xdg_output_objects: Vec<ZxdgOutputV1>,
 }
@@ -190,7 +176,6 @@ struct JsonOutput {
     shm_info: Vec<ShmInfo>,
     drm_lease_devices: Vec<DrmLeaseDeviceInfo>,
     presentation_info: Vec<PresentationInfo>,
-    treeland_output_managers: Vec<TreelandOutputManagerInfo>,
     xdg_output_managers: Vec<XdgOutputManagerInfo>,
 }
 
@@ -217,13 +202,11 @@ impl AppData {
             shm_info: Vec::new(),
             drm_lease_devices: Vec::new(),
             presentation_info: Vec::new(),
-            treeland_output_managers: Vec::new(),
             xdg_output_managers: Vec::new(),
             seat_objects: Vec::new(),
             output_objects: Vec::new(),
             shm_objects: Vec::new(),
             presentation_objects: Vec::new(),
-            treeland_output_manager_objects: Vec::new(),
             xdg_output_manager_objects: Vec::new(),
             xdg_output_objects: Vec::new(),
         }
@@ -321,19 +304,6 @@ impl AppData {
     fn update_presentation_clock_id(&mut self, presentation_index: usize, clock_id: u32) {
         if let Some(presentation) = self.presentation_info.get_mut(presentation_index) {
             presentation.clock_id = Some(clock_id);
-        }
-    }
-
-    fn add_treeland_output_manager(&mut self, name: u32) {
-        self.treeland_output_managers.push(TreelandOutputManagerInfo {
-            name,
-            primary_output: None,
-        });
-    }
-
-    fn update_treeland_primary_output(&mut self, manager_index: usize, output_name: String) {
-        if let Some(manager) = self.treeland_output_managers.get_mut(manager_index) {
-            manager.primary_output = Some(output_name);
         }
     }
 
@@ -516,7 +486,6 @@ impl AppData {
             shm_info: self.shm_info.clone(),
             drm_lease_devices: self.drm_lease_devices.clone(),
             presentation_info: self.presentation_info.clone(),
-            treeland_output_managers: self.treeland_output_managers.clone(),
             xdg_output_managers: self.xdg_output_managers.clone(),
         }
     }
@@ -668,21 +637,6 @@ impl AppData {
                 }
             }
 
-            // 打印 treeland_output_manager_v1 信息
-            if global.interface == "treeland_output_manager_v1" {
-                if let Some(manager) = self
-                    .treeland_output_managers
-                    .iter()
-                    .find(|m| m.name == global.name)
-                {
-                    if let Some(primary) = &manager.primary_output {
-                        println!("        Primary output: {}", primary.yellow());
-                    } else {
-                        println!("{}", "        Primary output: <unknown>".red());
-                    }
-                }
-            }
-
             // 打印 zxdg_output_manager_v1 信息
             if global.interface == "zxdg_output_manager_v1" {
                 if let Some(manager) = self
@@ -737,9 +691,6 @@ enum UserData {
     },
     Presentation {
         presentation_index: usize,
-    },
-    TreelandOutputManager {
-        manager_index: usize,
     },
     XdgOutputManager {
         manager_index: usize,
@@ -817,16 +768,6 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                     UserData::Presentation { presentation_index },
                 );
                 state.presentation_objects.push(presentation);
-            } else if interface == "treeland_output_manager_v1" {
-                state.add_treeland_output_manager(name);
-                let manager_index = state.treeland_output_managers.len() - 1;
-                let manager = registry.bind::<TreelandOutputManagerV1, _, _>(
-                    name,
-                    version,
-                    qh,
-                    UserData::TreelandOutputManager { manager_index },
-                );
-                state.treeland_output_manager_objects.push(manager);
             } else if interface == "zxdg_output_manager_v1" {
                 state.add_xdg_output_manager(name);
                 let manager_index = state.xdg_output_managers.len() - 1;
@@ -839,24 +780,6 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
                 state.xdg_output_manager_objects.push(manager);
             }
             state.add_global(name, interface, version);
-        }
-    }
-}
-
-// 实现 treeland_output_manager_v1 的事件处理
-impl Dispatch<TreelandOutputManagerV1, UserData> for AppData {
-    fn event(
-        state: &mut Self,
-        _manager: &TreelandOutputManagerV1,
-        event: treeland_output_manager_v1::Event,
-        data: &UserData,
-        _conn: &Connection,
-        _qh: &QueueHandle<AppData>,
-    ) {
-        if let UserData::TreelandOutputManager { manager_index } = data {
-            if let treeland_output_manager_v1::Event::PrimaryOutput { output_name } = event {
-                state.update_treeland_primary_output(*manager_index, output_name);
-            }
         }
     }
 }
@@ -1068,19 +991,21 @@ impl Dispatch<ZxdgOutputV1, UserData> for AppData {
 
 fn print_help() {
     println!("wayland-info-rs options:");
-    println!("    --json   Output JSON (skip detailed protocol data unless --full is also set)");
-    println!("    --full   Include detailed protocol data (seats, outputs, shm, etc.)");
+    println!("    --json    Output JSON");
+    println!("    --simple  Hide detailed protocol data (seats, outputs, shm, etc.)");
+    println!("    --full    Include detailed protocol data (default)");
     println!("    --help   Show this help");
 }
 
 fn main() {
     let mut json_output = false;
-    let mut full_output = false;
+    let mut full_output = true;
 
     for arg in env::args().skip(1) {
         match arg.as_str() {
             "--json" => json_output = true,
             "--full" => full_output = true,
+            "--simple" => full_output = false,
             "--help" | "-h" => {
                 print_help();
                 return;
