@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 repository = "https://github.com/dwapp/wayland-info-rs"
 homepage = "https://github.com/dwapp/wayland-info-rs"
-documentation = "https://docs.rs/wayland-info-rs"
+documentation = "https://github.com/dwapp/wayland-info-rs/blob/main/USAGE.md"
 
 [dependencies]
 colored = "3.0.0"
