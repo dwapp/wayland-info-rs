@@ -1,6 +1,6 @@
 [package]
 name = "wayland-info-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A Rust implementation of wayland-info for inspecting Wayland compositor globals and protocol capabilities."
 license = "MIT"
