@@ -69,9 +69,9 @@ checksum = "df1d3c3b53da64cf5760482273a98e575c651a67eec7f77df96b5b642de8f039"
 
 [[package]]
 name = "memchr"
-version = "2.7.6"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "pkg-config"
@@ -225,6 +225,7 @@ dependencies = [
  "serde_json",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-treeland",
 ]
 
 [[package]]
@@ -232,6 +233,18 @@ name = "wayland-protocols"
 version = "0.32.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baeda9ffbcfc8cd6ddaade385eaf2393bd2115a69523c735f12242353c3df4f3"
+dependencies = [
+ "bitflags",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols-treeland"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "629276253f3933a2b3ae407375d70761f6deb94c64bad7bb4f027147a80d48eb"
 dependencies = [
  "bitflags",
  "wayland-backend",
