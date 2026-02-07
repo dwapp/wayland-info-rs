@@ -17,6 +17,7 @@ By default it prints detailed protocol information.
 --full    Include detailed protocol data (default)
 --simple  Hide detailed protocol data
 --sort    Sort globals by interface (omit name field)
+--protocol, -p <name>  Only show matching protocol
 --help    Show help
 ```
 
@@ -50,6 +51,12 @@ Sorted output without name field:
 
 ```bash
 wayland-info-rs --sort
+```
+
+Filter output to a single protocol:
+
+```bash
+wayland-info-rs -p wl_seat
 ```
 
 ## Environment

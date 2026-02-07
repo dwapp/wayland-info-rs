@@ -21,7 +21,7 @@ use wayland_protocols_treeland::output_manager::v1::client::treeland_output_mana
     self, TreelandOutputManagerV1,
 };
 
-// 全局信息结构
+// Global info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GlobalInfo {
@@ -31,7 +31,7 @@ struct GlobalInfo {
     version: u32,
 }
 
-// Seat 信息结构
+// Seat info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SeatInfo {
@@ -43,7 +43,7 @@ struct SeatInfo {
     keyboard_repeat_delay: Option<i32>,
 }
 
-// Output 信息结构
+// Output info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct OutputInfo {
@@ -72,7 +72,7 @@ struct OutputMode {
     flags: Vec<String>,
 }
 
-// SHM 信息结构
+// SHM info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ShmInfo {
@@ -88,7 +88,7 @@ struct ShmFormat {
     fourcc: String,
 }
 
-// DRM Lease Device 信息结构
+// DRM lease device info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DrmLeaseDeviceInfo {
@@ -98,7 +98,7 @@ struct DrmLeaseDeviceInfo {
     connectors: Vec<DrmLeaseConnectorInfo>,
 }
 
-// DRM Lease Connector 信息结构
+// DRM lease connector info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DrmLeaseConnectorInfo {
@@ -107,7 +107,7 @@ struct DrmLeaseConnectorInfo {
     connector_id: u32,
 }
 
-// Presentation 信息结构
+// Presentation info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PresentationInfo {
@@ -116,7 +116,7 @@ struct PresentationInfo {
     clock_id: Option<u32>,
 }
 
-// Treeland Output Manager 信息结构
+// Treeland output manager info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TreelandOutputManagerInfo {
@@ -125,7 +125,7 @@ struct TreelandOutputManagerInfo {
     primary_output: Option<String>,
 }
 
-// XDG Output Manager 信息结构
+// XDG output manager info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct XdgOutputManagerInfo {
@@ -134,7 +134,7 @@ struct XdgOutputManagerInfo {
     outputs: Vec<XdgOutputInfo>,
 }
 
-// XDG Output 信息结构
+// XDG output info structure
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct XdgOutputInfo {
@@ -148,7 +148,7 @@ struct XdgOutputInfo {
     logical_height: i32,
 }
 
-// Output Geometry 信息结构，用于减少函数参数
+// Output geometry info structure to reduce function parameters
 #[derive(Debug)]
 struct OutputGeometry {
     x: i32,
@@ -161,7 +161,7 @@ struct OutputGeometry {
     model: String,
 }
 
-// 应用状态，用于收集所有信息
+// App state for collecting all info
 struct AppData {
     globals: Vec<GlobalInfo>,
     seats: Vec<SeatInfo>,
@@ -360,7 +360,7 @@ impl AppData {
             output.make = geometry.make;
             output.model = geometry.model;
 
-            // 转换 subpixel 枚举为字符串
+            // Convert subpixel enum to string
             output.subpixel_orientation = match geometry.subpixel {
                 WEnum::Value(wl_output::Subpixel::Unknown) => "unknown".to_string(),
                 WEnum::Value(wl_output::Subpixel::None) => "none".to_string(),
@@ -371,7 +371,7 @@ impl AppData {
                 _ => "unknown".to_string(),
             };
 
-            // 转换 transform 枚举为字符串
+            // Convert transform enum to string
             output.output_transform = match geometry.transform {
                 WEnum::Value(wl_output::Transform::Normal) => "normal".to_string(),
                 WEnum::Value(wl_output::Transform::_90) => "90".to_string(),
@@ -503,31 +503,76 @@ impl AppData {
         }
     }
 
-    fn to_json_output(&self, sort_output: bool) -> JsonOutput {
+    fn to_json_output(&self, sort_output: bool, protocol_filter: Option<&str>) -> JsonOutput {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
 
         let mut globals = self.globals.clone();
+        if let Some(protocol) = protocol_filter {
+            globals.retain(|g| g.interface == protocol);
+        }
         if sort_output {
             globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+        }
+
+        if protocol_filter.is_none() {
+            return JsonOutput {
+                generation_timestamp: timestamp_ms,
+                globals,
+                seats: self.seats.clone(),
+                outputs: self.outputs.clone(),
+                shm_info: self.shm_info.clone(),
+                drm_lease_devices: self.drm_lease_devices.clone(),
+                presentation_info: self.presentation_info.clone(),
+                treeland_output_managers: self.treeland_output_managers.clone(),
+                xdg_output_managers: self.xdg_output_managers.clone(),
+            };
         }
 
         JsonOutput {
             generation_timestamp: timestamp_ms,
             globals,
-            seats: self.seats.clone(),
-            outputs: self.outputs.clone(),
-            shm_info: self.shm_info.clone(),
-            drm_lease_devices: self.drm_lease_devices.clone(),
-            presentation_info: self.presentation_info.clone(),
-            treeland_output_managers: self.treeland_output_managers.clone(),
-            xdg_output_managers: self.xdg_output_managers.clone(),
+            seats: if protocol_filter == Some("wl_seat") {
+                self.seats.clone()
+            } else {
+                Vec::new()
+            },
+            outputs: if protocol_filter == Some("wl_output") {
+                self.outputs.clone()
+            } else {
+                Vec::new()
+            },
+            shm_info: if protocol_filter == Some("wl_shm") {
+                self.shm_info.clone()
+            } else {
+                Vec::new()
+            },
+            drm_lease_devices: if protocol_filter == Some("wp_drm_lease_device_v1") {
+                self.drm_lease_devices.clone()
+            } else {
+                Vec::new()
+            },
+            presentation_info: if protocol_filter == Some("wp_presentation") {
+                self.presentation_info.clone()
+            } else {
+                Vec::new()
+            },
+            treeland_output_managers: if protocol_filter == Some("treeland_output_manager_v1") {
+                self.treeland_output_managers.clone()
+            } else {
+                Vec::new()
+            },
+            xdg_output_managers: if protocol_filter == Some("zxdg_output_manager_v1") {
+                self.xdg_output_managers.clone()
+            } else {
+                Vec::new()
+            },
         }
     }
 
-    fn to_json_basic(&self, sort_output: bool) -> JsonOutputBasic {
+    fn to_json_basic(&self, sort_output: bool, protocol_filter: Option<&str>) -> JsonOutputBasic {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -536,6 +581,7 @@ impl AppData {
         let mut globals: Vec<GlobalSummary> = self
             .globals
             .iter()
+            .filter(|g| protocol_filter.map_or(true, |p| g.interface == p))
             .map(|g| GlobalSummary {
                 interface: g.interface.clone(),
                 version: g.version,
@@ -551,14 +597,25 @@ impl AppData {
         }
     }
 
-    fn print_all_info(&self, sort_output: bool) {
+    fn print_all_info(&self, sort_output: bool, protocol_filter: Option<&str>) {
+        if let Some(protocol) = protocol_filter {
+            if !self.globals.iter().any(|g| g.interface == protocol) {
+                println!("{} {}", "Protocol not supported:".red(), protocol);
+                return;
+            }
+        }
+
         println!("{}", "Wayland Global Interfaces:".bold().blue());
-        let mut globals: Vec<&GlobalInfo> = self.globals.iter().collect();
+        let mut globals: Vec<&GlobalInfo> = self
+            .globals
+            .iter()
+            .filter(|g| protocol_filter.map_or(true, |p| g.interface == p))
+            .collect();
         if sort_output {
             globals.sort_by(|a, b| a.interface.cmp(&b.interface));
         }
         for global in globals {
-            // 接口类型用蓝色
+            // Interface type in blue
             if sort_output {
                 println!(
                     "interface: {:<45} version: {}",
@@ -574,10 +631,21 @@ impl AppData {
                 );
             }
 
-            // 打印 seat 信息
+            if let Some(protocol) = protocol_filter {
+                if !protocol_has_details(protocol) {
+                    println!(
+                        "{}",
+                        "        [Info] wayland-info-rs does not implement details for this protocol"
+                            .yellow()
+                    );
+                    continue;
+                }
+            }
+
+            // Print seat info
             if global.interface == "wl_seat" {
                 if let Some(seat) = self.seats.iter().find(|s| s.name == global.name) {
-                    // seat 名用绿色
+                    // Seat name in green
                     println!("        name: {}", seat.seat_name.green());
                     if !seat.capabilities.is_empty() {
                         println!("        capabilities: {}", seat.capabilities.join(" "));
@@ -591,10 +659,10 @@ impl AppData {
                 }
             }
 
-            // 打印 output 信息
+            // Print output info
             if global.interface == "wl_output" {
                 if let Some(output) = self.outputs.iter().find(|o| o.name == global.name) {
-                    // output 名用黄色
+                    // Output name in yellow
                     println!("        name: {}", output.output_name.yellow());
                     if !output.description.is_empty() {
                         println!("        description: {}", output.description);
@@ -630,7 +698,7 @@ impl AppData {
                 }
             }
 
-            // 打印 shm 信息
+            // Print shm info
             if global.interface == "wl_shm" {
                 if let Some(shm) = self.shm_info.iter().find(|s| s.name == global.name) {
                     for format in &shm.formats {
@@ -639,7 +707,7 @@ impl AppData {
                 }
             }
 
-            // 打印 wp_drm_lease_device_v1 信息
+            // Print wp_drm_lease_device_v1 info
             if global.interface == "wp_drm_lease_device_v1" {
                 if let Some(device) = self
                     .drm_lease_devices
@@ -669,7 +737,7 @@ impl AppData {
                 }
             }
 
-            // 打印 wp_presentation 信息
+            // Print wp_presentation info
             if global.interface == "wp_presentation" {
                 if let Some(presentation) = self
                     .presentation_info
@@ -689,7 +757,7 @@ impl AppData {
                 }
             }
 
-            // 打印 treeland_output_manager_v1 信息
+            // Print treeland_output_manager_v1 info
             if global.interface == "treeland_output_manager_v1" {
                 if let Some(manager) = self
                     .treeland_output_managers
@@ -704,7 +772,7 @@ impl AppData {
                 }
             }
 
-            // 打印 zxdg_output_manager_v1 信息
+            // Print zxdg_output_manager_v1 info
             if global.interface == "zxdg_output_manager_v1" {
                 if let Some(manager) = self
                     .xdg_output_managers
@@ -730,9 +798,20 @@ impl AppData {
         }
     }
 
-    fn print_basic_info(&self, sort_output: bool) {
+    fn print_basic_info(&self, sort_output: bool, protocol_filter: Option<&str>) {
+        if let Some(protocol) = protocol_filter {
+            if !self.globals.iter().any(|g| g.interface == protocol) {
+                println!("{} {}", "Protocol not supported:".red(), protocol);
+                return;
+            }
+        }
+
         println!("{}", "Wayland Global Interfaces:".bold().blue());
-        let mut globals: Vec<&GlobalInfo> = self.globals.iter().collect();
+        let mut globals: Vec<&GlobalInfo> = self
+            .globals
+            .iter()
+            .filter(|g| protocol_filter.map_or(true, |p| g.interface == p))
+            .collect();
         if sort_output {
             globals.sort_by(|a, b| a.interface.cmp(&b.interface));
         }
@@ -751,11 +830,34 @@ impl AppData {
                     global.version.to_string().yellow()
                 );
             }
+
+            if let Some(protocol) = protocol_filter {
+                if !protocol_has_details(protocol) {
+                    println!(
+                        "{}",
+                        "        [Info] wayland-info-rs does not implement details for this protocol"
+                            .yellow()
+                    );
+                }
+            }
         }
     }
 }
 
-// 通用用户数据类型
+fn protocol_has_details(protocol: &str) -> bool {
+    matches!(
+        protocol,
+        "wl_seat"
+            | "wl_output"
+            | "wl_shm"
+            | "wp_drm_lease_device_v1"
+            | "wp_presentation"
+            | "treeland_output_manager_v1"
+            | "zxdg_output_manager_v1"
+    )
+}
+
+// Common user data type
 #[derive(Debug)]
 #[allow(dead_code)]
 enum UserData {
@@ -783,7 +885,7 @@ enum UserData {
     },
 }
 
-// 将格式代码转换为 FOURCC 字符串
+// Convert format code to FOURCC string
 fn format_to_fourcc(format: u32) -> String {
     let bytes = [
         (format & 0xFF) as u8,
@@ -792,7 +894,7 @@ fn format_to_fourcc(format: u32) -> String {
         ((format >> 24) & 0xFF) as u8,
     ];
 
-    // 检查是否为可打印字符
+    // Check whether bytes are printable
     if bytes.iter().all(|&b| b.is_ascii_graphic()) {
         String::from_utf8_lossy(&bytes).to_string()
     } else {
@@ -800,7 +902,7 @@ fn format_to_fourcc(format: u32) -> String {
     }
 }
 
-// 实现 wl_registry 的事件处理
+// Handle wl_registry events
 impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
     fn event(
         state: &mut Self,
@@ -876,7 +978,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
     }
 }
 
-// 实现 treeland_output_manager_v1 的事件处理
+// Handle treeland_output_manager_v1 events
 impl Dispatch<TreelandOutputManagerV1, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -894,7 +996,7 @@ impl Dispatch<TreelandOutputManagerV1, UserData> for AppData {
     }
 }
 
-// 实现 wl_seat 的事件处理
+// Handle wl_seat events
 impl Dispatch<WlSeat, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -931,7 +1033,7 @@ impl Dispatch<WlSeat, UserData> for AppData {
     }
 }
 
-// 实现 wl_keyboard 的事件处理
+// Handle wl_keyboard events
 impl Dispatch<WlKeyboard, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -949,7 +1051,7 @@ impl Dispatch<WlKeyboard, UserData> for AppData {
     }
 }
 
-// 实现 wl_output 的事件处理
+// Handle wl_output events
 impl Dispatch<WlOutput, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -1006,7 +1108,7 @@ impl Dispatch<WlOutput, UserData> for AppData {
     }
 }
 
-// 实现 wl_shm 的事件处理
+// Handle wl_shm events
 impl Dispatch<WlShm, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -1025,7 +1127,7 @@ impl Dispatch<WlShm, UserData> for AppData {
     }
 }
 
-// 实现 wp_presentation 的事件处理
+// Handle wp_presentation events
 impl Dispatch<WpPresentation, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -1043,7 +1145,7 @@ impl Dispatch<WpPresentation, UserData> for AppData {
     }
 }
 
-// 实现 zxdg_output_manager_v1 的事件处理
+// Handle zxdg_output_manager_v1 events
 impl Dispatch<ZxdgOutputManagerV1, UserData> for AppData {
     fn event(
         _state: &mut Self,
@@ -1057,7 +1159,7 @@ impl Dispatch<ZxdgOutputManagerV1, UserData> for AppData {
     }
 }
 
-// 实现 zxdg_output_v1 的事件处理
+// Handle zxdg_output_v1 events
 impl Dispatch<ZxdgOutputV1, UserData> for AppData {
     fn event(
         state: &mut Self,
@@ -1105,6 +1207,7 @@ fn print_help() {
     println!("    --simple  Hide detailed protocol data (seats, outputs, shm, etc.)");
     println!("    --full    Include detailed protocol data (default)");
     println!("    --sort    Sort globals by interface (omit name field)");
+    println!("    -p, --protocol <name>  Only show matching protocol");
     println!("    --help   Show this help");
 }
 
@@ -1112,13 +1215,23 @@ fn main() {
     let mut json_output = false;
     let mut full_output = true;
     let mut sort_output = false;
+    let mut protocol_filter: Option<String> = None;
 
-    for arg in env::args().skip(1) {
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
         match arg.as_str() {
             "--json" => json_output = true,
             "--full" => full_output = true,
             "--simple" => full_output = false,
             "--sort" => sort_output = true,
+            "-p" | "--protocol" => {
+                if let Some(value) = args.next() {
+                    protocol_filter = Some(value);
+                } else {
+                    eprintln!("{}", "Missing value for -p/--protocol".red());
+                    return;
+                }
+            }
             "--help" | "-h" => {
                 print_help();
                 return;
@@ -1135,24 +1248,24 @@ fn main() {
         );
     }
 
-    // 创建 Wayland 连接
+    // Create Wayland connection
     let conn = Connection::connect_to_env().unwrap();
     let display = conn.display();
 
-    // 创建事件队列
+    // Create event queue
     let mut event_queue = conn.new_event_queue();
     let qh = event_queue.handle();
 
-    // 创建应用状态
+    // Create app state
     let mut app_data = AppData::new();
 
-    // 获取 registry
+    // Get registry
     let _registry = display.get_registry(&qh, ());
 
-    // 执行 roundtrip 来收集所有全局对象信息
+    // Run roundtrip to collect all globals
     event_queue.roundtrip(&mut app_data).unwrap();
 
-    // 为每个 zxdg_output_manager_v1 创建对应的 xdg_output 对象
+    // Create xdg_output objects for each zxdg_output_manager_v1
     let managers: Vec<_> = app_data.xdg_output_manager_objects.drain(..).collect();
     let outputs: Vec<_> = app_data.output_objects.drain(..).collect();
 
@@ -1174,19 +1287,19 @@ fn main() {
         }
     }
 
-    // 放回 app_data
+    // Put objects back into app_data
     app_data.xdg_output_manager_objects = managers;
     app_data.output_objects = outputs;
     app_data.xdg_output_objects = xdg_output_objects;
 
-    // 更新 manager 的输出信息
+    // Update manager output info
     for (manager_index, output_ids) in xdg_output_infos.into_iter().enumerate() {
         for output_id in output_ids {
             app_data.add_xdg_output(manager_index, output_id);
         }
     }
 
-    // 为每个 seat 绑定键盘以获取重复信息
+    // Bind a keyboard for each seat to get repeat info
     let seat_objects: Vec<_> = app_data.seat_objects.drain(..).collect();
     for (index, seat) in seat_objects.iter().enumerate() {
         let seat_data = UserData::Seat { seat_index: index };
@@ -1194,23 +1307,23 @@ fn main() {
         event_queue.roundtrip(&mut app_data).unwrap();
     }
 
-    // 多次 roundtrip 确保 xdg_output 事件能被处理
+    // Run roundtrip multiple times to process xdg_output events
     for _ in 0..5 {
         event_queue.roundtrip(&mut app_data).unwrap();
     }
 
-    // 统一输出所有信息
+    // Output all info
     if json_output {
         if full_output {
-            let json_payload = app_data.to_json_output(sort_output);
+            let json_payload = app_data.to_json_output(sort_output, protocol_filter.as_deref());
             println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
         } else {
-            let json_payload = app_data.to_json_basic(sort_output);
+            let json_payload = app_data.to_json_basic(sort_output, protocol_filter.as_deref());
             println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
         }
     } else if full_output {
-        app_data.print_all_info(sort_output);
+        app_data.print_all_info(sort_output, protocol_filter.as_deref());
     } else {
-        app_data.print_basic_info(sort_output);
+        app_data.print_basic_info(sort_output, protocol_filter.as_deref());
     }
 }
