@@ -325,10 +325,11 @@ impl AppData {
     }
 
     fn add_treeland_output_manager(&mut self, name: u32) {
-        self.treeland_output_managers.push(TreelandOutputManagerInfo {
-            name,
-            primary_output: None,
-        });
+        self.treeland_output_managers
+            .push(TreelandOutputManagerInfo {
+                name,
+                primary_output: None,
+            });
     }
 
     fn update_treeland_primary_output(&mut self, manager_index: usize, output_name: String) {
