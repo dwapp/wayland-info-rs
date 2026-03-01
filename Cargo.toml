@@ -11,7 +11,7 @@ documentation = "https://github.com/dwapp/wayland-info-rs/blob/main/USAGE.md"
 
 [dependencies]
 colored = "3.0.0"
-clap = { version = "4.5.23", features = ["derive"] }
+clap = { version = "4.5.60", features = ["derive"] }
 wayland-client = "0.31.7"
 wayland-protocols = { version = "0.32.10", features = ["staging", "unstable", "client"] }
 wayland-protocols-treeland = { version = "0.1.0", features = ["client"] }
