@@ -162,7 +162,7 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
         } else {
             println!(
                 "name: {:<4} interface: {:<45} version: {}",
-                global.name,
+                global.name.to_string().dimmed(),
                 global.interface.blue(),
                 global.version.to_string().yellow()
             );
@@ -183,13 +183,22 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
             if let Some(seat) = app_data.seats.iter().find(|s| s.name == global.name) {
                 println!("        name: {}", seat.seat_name.green());
                 if !seat.capabilities.is_empty() {
-                    println!("        capabilities: {}", seat.capabilities.join(" "));
+                    println!(
+                        "        capabilities: {}",
+                        seat.capabilities.join(" ").cyan()
+                    );
                 }
                 if let Some(rate) = seat.keyboard_repeat_rate {
-                    println!("        keyboard repeat rate: {}", rate);
+                    println!(
+                        "        keyboard repeat rate: {}",
+                        rate.to_string().yellow()
+                    );
                 }
                 if let Some(delay) = seat.keyboard_repeat_delay {
-                    println!("        keyboard repeat delay: {}", delay);
+                    println!(
+                        "        keyboard repeat delay: {}",
+                        delay.to_string().yellow()
+                    );
                 }
             }
         }
@@ -198,34 +207,35 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
             if let Some(output) = app_data.outputs.iter().find(|o| o.name == global.name) {
                 println!("        name: {}", output.output_name.yellow());
                 if !output.description.is_empty() {
-                    println!("        description: {}", output.description);
+                    println!("        description: {}", output.description.cyan());
                 }
                 println!(
                     "        x: {}, y: {}, scale: {},",
-                    output.x, output.y, output.scale
+                    output.x.to_string().yellow(),
+                    output.y.to_string().yellow(),
+                    output.scale.to_string().yellow()
                 );
                 println!(
                     "        physical_width: {} mm, physical_height: {} mm,",
-                    output.physical_width, output.physical_height
+                    output.physical_width.to_string().yellow(),
+                    output.physical_height.to_string().yellow()
                 );
                 if !output.make.is_empty() {
                     println!(
                         "        make: '{}', model: '{}',",
-                        output.make, output.model
+                        output.make.green(),
+                        output.model.green()
                     );
                 }
                 println!(
                     "        subpixel_orientation: {}, output_transform: {},",
-                    output.subpixel_orientation, output.output_transform
+                    output.subpixel_orientation.cyan(),
+                    output.output_transform.cyan()
                 );
 
                 for mode in &output.modes {
                     println!(
-                        "        mode:\n                width: {} px, height: {} px, refresh: {:.3} Hz,\n                flags: {}",
-                        mode.width,
-                        mode.height,
-                        mode.refresh as f32 / 1000.0,
-                        mode.flags.join(" ")
+                        "        mode:\n                width: {} px, height: {} px, refresh: {:.3} Hz,\n                flags: {}", mode.width.to_string().yellow(), mode.height.to_string().yellow(), (mode.refresh as f32 / 1000.0).to_string().yellow(), mode.flags.join(" ").cyan()
                     );
                 }
             }
@@ -234,7 +244,11 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
         if global.interface == "wl_shm" {
             if let Some(shm) = app_data.shm_info.iter().find(|s| s.name == global.name) {
                 for format in &shm.formats {
-                    println!("        format: {} ({})", format.fourcc, format.format);
+                    println!(
+                        "        format: {} ({})",
+                        format.fourcc.green(),
+                        format.format.to_string().yellow()
+                    );
                 }
             }
         }
@@ -246,9 +260,9 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                 .find(|d| d.name == global.name)
             {
                 if let Some(path) = &device.device_path {
-                    println!("        path: {}", path);
+                    println!("        path: {}", path.green());
                 } else {
-                    println!("        path: /dev/dri/card1");
+                    println!("        path: {}", "/dev/dri/card1".green());
                 }
 
                 if !device.connectors.is_empty() {
@@ -256,7 +270,9 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                     for connector in &device.connectors {
                         println!(
                             "                name: {}, description: {}, connector_id: {}",
-                            connector.name, connector.description, connector.connector_id
+                            connector.name.green(),
+                            connector.description.cyan(),
+                            connector.connector_id.to_string().yellow()
                         );
                     }
                 }
@@ -277,10 +293,13 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                 if let Some(clock_id) = presentation.clock_id {
                     println!(
                         "        presentation clock id: {} (CLOCK_MONOTONIC)",
-                        clock_id
+                        clock_id.to_string().yellow()
                     );
                 } else {
-                    println!("        presentation clock id: 1 (CLOCK_MONOTONIC)");
+                    println!(
+                        "        presentation clock id: {} (CLOCK_MONOTONIC)",
+                        "1".yellow()
+                    );
                 }
             } else {
                 println!("{}", "        [Warning] Presentation info not found!".red());
@@ -296,7 +315,7 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                 if let Some(primary) = &manager.primary_output {
                     println!("        Primary output: {}", primary.yellow());
                 } else {
-                    println!("{}", "        Primary output: <unknown>".red());
+                    println!("        Primary output: {}", "<unknown>".red());
                 }
             }
         }
@@ -308,17 +327,25 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                 .find(|m| m.name == global.name)
             {
                 for output in &manager.outputs {
-                    println!("        xdg_output_v1");
-                    println!("                output: {}", output.output_id);
-                    println!("                name: '{}'", output.name);
-                    println!("                description: '{}'", output.description);
+                    println!("        {}", "xdg_output_v1".cyan());
+                    println!(
+                        "                output: {}",
+                        output.output_id.to_string().yellow()
+                    );
+                    println!("                name: '{}'", output.name.green());
+                    println!(
+                        "                description: '{}'",
+                        output.description.cyan()
+                    );
                     println!(
                         "                logical_x: {}, logical_y: {}",
-                        output.logical_x, output.logical_y
+                        output.logical_x.to_string().yellow(),
+                        output.logical_y.to_string().yellow()
                     );
                     println!(
                         "                logical_width: {}, logical_height: {}",
-                        output.logical_width, output.logical_height
+                        output.logical_width.to_string().yellow(),
+                        output.logical_height.to_string().yellow()
                     );
                 }
             }
@@ -353,7 +380,7 @@ pub fn print_basic_info(app_data: &AppData, sort_output: bool, protocol_filter: 
         } else {
             println!(
                 "name: {:<4} interface: {:<45} version: {}",
-                global.name,
+                global.name.to_string().dimmed(),
                 global.interface.blue(),
                 global.version.to_string().yellow()
             );
