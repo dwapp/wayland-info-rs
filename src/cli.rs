@@ -2,6 +2,7 @@ use clap::{ArgGroup, Parser};
 
 #[derive(Debug, Parser)]
 #[command(name = "wayland-info-rs")]
+#[command(version)]
 #[command(about = "Wayland protocol information dumper", long_about = None)]
 #[command(group = ArgGroup::new("detail").args(["full", "simple"]).multiple(false))]
 pub struct Cli {
