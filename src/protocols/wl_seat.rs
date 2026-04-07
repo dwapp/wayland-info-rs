@@ -58,6 +58,7 @@ impl Dispatch<WlSeat, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::Seat { seat_index } = data {
+            state.mark_event();
             match event {
                 wl_seat::Event::Capabilities { capabilities } => {
                     let mut caps = Vec::new();
@@ -95,6 +96,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::Seat { seat_index } = data {
+            state.mark_event();
             if let wl_keyboard::Event::RepeatInfo { rate, delay } = event {
                 state.update_seat_keyboard_repeat(*seat_index, rate, delay);
             }

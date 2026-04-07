@@ -137,6 +137,7 @@ impl Dispatch<ZxdgOutputV1, UserData> for AppData {
             output_index,
         } = data
         {
+            state.mark_event();
             match event {
                 zxdg_output_v1::Event::Name { name } => {
                     state.update_xdg_output_name(*manager_index, *output_index, name);

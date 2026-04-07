@@ -43,6 +43,7 @@ impl Dispatch<WpPresentation, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::Presentation { presentation_index } = data {
+            state.mark_event();
             if let wp_presentation::Event::ClockId { clk_id } = event {
                 state.update_presentation_clock_id(*presentation_index, clk_id);
             }

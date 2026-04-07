@@ -24,6 +24,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppData {
             version,
         } = event
         {
+            state.mark_event();
             if interface == "wl_seat" {
                 state.add_seat(name, format!("seat{}", state.seats.len()));
                 let seat_index = state.seats.len() - 1;

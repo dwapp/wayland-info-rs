@@ -72,8 +72,17 @@ fn main() {
         event_queue.roundtrip(&mut app_data).unwrap();
     }
 
-    for _ in 0..5 {
+    // Drain any events from earlier roundtrips before starting convergence detection.
+    app_data.take_pending_events();
+
+    // Keep dispatching until no new events are received in a roundtrip,
+    // indicating the compositor has finished sending initial state.
+    const MAX_ROUNDTRIPS: usize = 20;
+    for _ in 0..MAX_ROUNDTRIPS {
         event_queue.roundtrip(&mut app_data).unwrap();
+        if app_data.take_pending_events() == 0 {
+            break;
+        }
     }
 
     if options.json_output {

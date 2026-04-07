@@ -73,6 +73,7 @@ impl Dispatch<WlShm, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::Shm { shm_index } = data {
+            state.mark_event();
             if let wl_shm::Event::Format { format } = event {
                 state.add_shm_format(*shm_index, format);
             }

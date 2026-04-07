@@ -46,6 +46,7 @@ impl Dispatch<TreelandOutputManagerV1, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::TreelandOutputManager { manager_index } = data {
+            state.mark_event();
             if let treeland_output_manager_v1::Event::PrimaryOutput { output_name } = event {
                 state.update_treeland_primary_output(*manager_index, output_name);
             }

@@ -34,6 +34,7 @@ pub struct AppData {
     pub(crate) treeland_output_manager_objects: Vec<TreelandOutputManagerV1>,
     pub(crate) xdg_output_manager_objects: Vec<ZxdgOutputManagerV1>,
     pub(crate) xdg_output_objects: Vec<ZxdgOutputV1>,
+    pending_events: usize,
 }
 
 impl AppData {
@@ -54,6 +55,7 @@ impl AppData {
             treeland_output_manager_objects: Vec::new(),
             xdg_output_manager_objects: Vec::new(),
             xdg_output_objects: Vec::new(),
+            pending_events: 0,
         }
     }
 
@@ -63,6 +65,18 @@ impl AppData {
             interface,
             version,
         });
+    }
+
+    /// Increment the pending event counter. Call this from each Dispatch handler.
+    pub(crate) fn mark_event(&mut self) {
+        self.pending_events += 1;
+    }
+
+    /// Return the pending event count and reset it to zero.
+    pub(crate) fn take_pending_events(&mut self) -> usize {
+        let count = self.pending_events;
+        self.pending_events = 0;
+        count
     }
 }
 

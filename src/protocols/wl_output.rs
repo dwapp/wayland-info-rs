@@ -157,6 +157,7 @@ impl Dispatch<WlOutput, UserData> for AppData {
         _qh: &QueueHandle<AppData>,
     ) {
         if let UserData::Output { output_index } = data {
+            state.mark_event();
             match event {
                 wl_output::Event::Geometry {
                     x,
