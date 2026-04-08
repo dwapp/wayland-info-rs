@@ -8,15 +8,16 @@ use crate::app::{AppData, GlobalInfo};
 #[serde(rename_all = "camelCase")]
 pub struct JsonOutput {
     generation_timestamp: u64,
-    globals: Vec<GlobalInfo>,
-    seats: Vec<crate::protocols::wl_seat::SeatInfo>,
-    outputs: Vec<crate::protocols::wl_output::OutputInfo>,
-    shm_info: Vec<crate::protocols::wl_shm::ShmInfo>,
-    drm_lease_devices: Vec<crate::protocols::wp_drm_lease_device::DrmLeaseDeviceInfo>,
-    presentation_info: Vec<crate::protocols::wp_presentation::PresentationInfo>,
-    treeland_output_managers:
-        Vec<crate::protocols::treeland_output_manager::TreelandOutputManagerInfo>,
-    xdg_output_managers: Vec<crate::protocols::xdg_output::XdgOutputManagerInfo>,
+    globals: Vec<GlobalNode>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalNode {
+    pub interface: String,
+    pub version: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub info: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -43,66 +44,85 @@ pub fn to_json_output(
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
 
-    let mut globals = app_data.globals.clone();
-    if let Some(protocol) = protocol_filter {
-        globals.retain(|g| g.interface == protocol);
-    }
-    if sort_output {
-        globals.sort_by(|a, b| a.interface.cmp(&b.interface));
+    let mut globals = Vec::new();
+
+    for global in &app_data.globals {
+        if let Some(protocol) = protocol_filter {
+            if global.interface != protocol {
+                continue;
+            }
+        }
+
+        let mut info = None;
+        match global.interface.as_str() {
+            "wl_seat" => {
+                if let Some(seat) = app_data.seats.iter().find(|s| s.name == global.name) {
+                    info = Some(serde_json::to_value(vec![seat]).unwrap());
+                }
+            }
+            "wl_output" => {
+                if let Some(output) = app_data.outputs.iter().find(|o| o.name == global.name) {
+                    info = Some(serde_json::to_value(vec![output]).unwrap());
+                }
+            }
+            "wl_shm" => {
+                if let Some(shm) = app_data.shm_info.iter().find(|s| s.name == global.name) {
+                    info = Some(serde_json::to_value(vec![shm]).unwrap());
+                }
+            }
+            "wp_drm_lease_device_v1" => {
+                if let Some(device) = app_data
+                    .drm_lease_devices
+                    .iter()
+                    .find(|d| d.name == global.name)
+                {
+                    info = Some(serde_json::to_value(vec![device]).unwrap());
+                }
+            }
+            "wp_presentation" => {
+                if let Some(presentation) = app_data
+                    .presentation_info
+                    .iter()
+                    .find(|p| p.name == global.name)
+                {
+                    info = Some(serde_json::to_value(vec![presentation]).unwrap());
+                }
+            }
+            "treeland_output_manager_v1" => {
+                if let Some(manager) = app_data
+                    .treeland_output_managers
+                    .iter()
+                    .find(|m| m.name == global.name)
+                {
+                    info = Some(serde_json::to_value(vec![manager]).unwrap());
+                }
+            }
+            "zxdg_output_manager_v1" => {
+                if let Some(manager) = app_data
+                    .xdg_output_managers
+                    .iter()
+                    .find(|m| m.name == global.name)
+                {
+                    info = Some(serde_json::to_value(vec![manager]).unwrap());
+                }
+            }
+            _ => {}
+        }
+
+        globals.push(GlobalNode {
+            interface: global.interface.clone(),
+            version: global.version,
+            info,
+        });
     }
 
-    if protocol_filter.is_none() {
-        return JsonOutput {
-            generation_timestamp: timestamp_ms,
-            globals,
-            seats: app_data.seats.clone(),
-            outputs: app_data.outputs.clone(),
-            shm_info: app_data.shm_info.clone(),
-            drm_lease_devices: app_data.drm_lease_devices.clone(),
-            presentation_info: app_data.presentation_info.clone(),
-            treeland_output_managers: app_data.treeland_output_managers.clone(),
-            xdg_output_managers: app_data.xdg_output_managers.clone(),
-        };
+    if sort_output {
+        globals.sort_by(|a, b| a.interface.cmp(&b.interface));
     }
 
     JsonOutput {
         generation_timestamp: timestamp_ms,
         globals,
-        seats: if protocol_filter == Some("wl_seat") {
-            app_data.seats.clone()
-        } else {
-            Vec::new()
-        },
-        outputs: if protocol_filter == Some("wl_output") {
-            app_data.outputs.clone()
-        } else {
-            Vec::new()
-        },
-        shm_info: if protocol_filter == Some("wl_shm") {
-            app_data.shm_info.clone()
-        } else {
-            Vec::new()
-        },
-        drm_lease_devices: if protocol_filter == Some("wp_drm_lease_device_v1") {
-            app_data.drm_lease_devices.clone()
-        } else {
-            Vec::new()
-        },
-        presentation_info: if protocol_filter == Some("wp_presentation") {
-            app_data.presentation_info.clone()
-        } else {
-            Vec::new()
-        },
-        treeland_output_managers: if protocol_filter == Some("treeland_output_manager_v1") {
-            app_data.treeland_output_managers.clone()
-        } else {
-            Vec::new()
-        },
-        xdg_output_managers: if protocol_filter == Some("zxdg_output_manager_v1") {
-            app_data.xdg_output_managers.clone()
-        } else {
-            Vec::new()
-        },
     }
 }
 

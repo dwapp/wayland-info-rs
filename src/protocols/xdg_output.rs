@@ -13,6 +13,7 @@ use crate::app::{AppData, UserData};
 pub struct XdgOutputManagerInfo {
     #[serde(skip_serializing)]
     pub(crate) name: u32,
+    #[serde(rename = "xdg_output_v1")]
     pub(crate) outputs: Vec<XdgOutputInfo>,
 }
 
