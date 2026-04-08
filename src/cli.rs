@@ -1,30 +1,31 @@
-use clap::{ArgGroup, Parser};
+use argh::FromArgs;
 
-#[derive(Debug, Parser)]
-#[command(name = "wayland-info-rs")]
-#[command(version)]
-#[command(about = "Wayland protocol information dumper", long_about = None)]
-#[command(group = ArgGroup::new("detail").args(["full", "simple"]).multiple(false))]
+#[derive(Debug, FromArgs)]
+/// Wayland protocol information dumper
 pub struct Cli {
-    /// Output JSON
-    #[arg(long)]
+    /// output JSON
+    #[argh(switch)]
     pub json: bool,
 
-    /// Include detailed protocol data (default)
-    #[arg(long)]
+    /// include detailed protocol data (default unless --simple is used)
+    #[argh(switch)]
     pub full: bool,
 
-    /// Hide detailed protocol data
-    #[arg(long)]
+    /// hide detailed protocol data
+    #[argh(switch)]
     pub simple: bool,
 
-    /// Sort globals by interface (omit name field)
-    #[arg(long)]
+    /// sort globals by interface (omit name field)
+    #[argh(switch)]
     pub sort: bool,
 
-    /// Only show matching protocol
-    #[arg(short = 'p', long = "protocol")]
+    /// only show matching protocol
+    #[argh(option, short = 'p')]
     pub protocol: Option<String>,
+
+    /// print version information and exit
+    #[argh(switch, short = 'v')]
+    pub version: bool,
 }
 
 pub struct CliOptions {
@@ -35,7 +36,18 @@ pub struct CliOptions {
 }
 
 pub fn parse_args() -> CliOptions {
-    let cli = Cli::parse();
+    let cli: Cli = argh::from_env();
+
+    if cli.version {
+        println!("wayland-info-rs {}", env!("CARGO_PKG_VERSION"));
+        std::process::exit(0);
+    }
+
+    if cli.full && cli.simple {
+        eprintln!("Error: The argument '--full' cannot be used with '--simple'");
+        std::process::exit(1);
+    }
+
     let full_output = !cli.simple;
 
     CliOptions {
