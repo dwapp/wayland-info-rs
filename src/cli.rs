@@ -7,10 +7,6 @@ pub struct Cli {
     #[argh(switch)]
     pub json: bool,
 
-    /// include detailed protocol data (default unless --simple is used)
-    #[argh(switch)]
-    pub full: bool,
-
     /// hide detailed protocol data
     #[argh(switch)]
     pub simple: bool,
@@ -41,11 +37,6 @@ pub fn parse_args() -> CliOptions {
     if cli.version {
         println!("wayland-info-rs {}", env!("CARGO_PKG_VERSION"));
         std::process::exit(0);
-    }
-
-    if cli.full && cli.simple {
-        eprintln!("Error: The argument '--full' cannot be used with '--simple'");
-        std::process::exit(1);
     }
 
     let full_output = !cli.simple;
