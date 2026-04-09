@@ -62,15 +62,20 @@ impl Dispatch<WlSeat, UserData> for AppData {
             match event {
                 wl_seat::Event::Capabilities { capabilities } => {
                     let mut caps = Vec::new();
-                    match capabilities {
-                        WEnum::Value(wl_seat::Capability::Pointer) => {
-                            caps.push("pointer".to_string())
-                        }
-                        WEnum::Value(wl_seat::Capability::Keyboard) => {
-                            caps.push("keyboard".to_string())
-                        }
-                        WEnum::Value(wl_seat::Capability::Touch) => caps.push("touch".to_string()),
-                        _ => {}
+                    // `capabilities` is a bitmask that may combine multiple values;
+                    // check each bit independently instead of matching on a single variant.
+                    let caps_value = match capabilities {
+                        WEnum::Value(v) => v.bits(),
+                        WEnum::Unknown(v) => v,
+                    };
+                    if caps_value & wl_seat::Capability::Pointer.bits() != 0 {
+                        caps.push("pointer".to_string());
+                    }
+                    if caps_value & wl_seat::Capability::Keyboard.bits() != 0 {
+                        caps.push("keyboard".to_string());
+                    }
+                    if caps_value & wl_seat::Capability::Touch.bits() != 0 {
+                        caps.push("touch".to_string());
                     }
                     state.update_seat_capabilities(*seat_index, caps);
                 }

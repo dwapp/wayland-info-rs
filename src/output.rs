@@ -46,68 +46,13 @@ pub fn to_json_output(
 
     let mut globals = Vec::new();
 
-    for global in &app_data.globals {
-        if let Some(protocol) = protocol_filter {
-            if global.interface != protocol {
-                continue;
-            }
-        }
+    let iter = app_data
+        .globals
+        .iter()
+        .filter(|g| protocol_filter.is_none_or(|p| g.interface == p));
 
-        let mut info = None;
-        match global.interface.as_str() {
-            "wl_seat" => {
-                if let Some(seat) = app_data.seats.iter().find(|s| s.name == global.name) {
-                    info = Some(serde_json::to_value(vec![seat]).unwrap());
-                }
-            }
-            "wl_output" => {
-                if let Some(output) = app_data.outputs.iter().find(|o| o.name == global.name) {
-                    info = Some(serde_json::to_value(vec![output]).unwrap());
-                }
-            }
-            "wl_shm" => {
-                if let Some(shm) = app_data.shm_info.iter().find(|s| s.name == global.name) {
-                    info = Some(serde_json::to_value(vec![shm]).unwrap());
-                }
-            }
-            "wp_drm_lease_device_v1" => {
-                if let Some(device) = app_data
-                    .drm_lease_devices
-                    .iter()
-                    .find(|d| d.name == global.name)
-                {
-                    info = Some(serde_json::to_value(vec![device]).unwrap());
-                }
-            }
-            "wp_presentation" => {
-                if let Some(presentation) = app_data
-                    .presentation_info
-                    .iter()
-                    .find(|p| p.name == global.name)
-                {
-                    info = Some(serde_json::to_value(vec![presentation]).unwrap());
-                }
-            }
-            "treeland_output_manager_v1" => {
-                if let Some(manager) = app_data
-                    .treeland_output_managers
-                    .iter()
-                    .find(|m| m.name == global.name)
-                {
-                    info = Some(serde_json::to_value(vec![manager]).unwrap());
-                }
-            }
-            "zxdg_output_manager_v1" => {
-                if let Some(manager) = app_data
-                    .xdg_output_managers
-                    .iter()
-                    .find(|m| m.name == global.name)
-                {
-                    info = Some(serde_json::to_value(vec![manager]).unwrap());
-                }
-            }
-            _ => {}
-        }
+    for global in iter {
+        let info = get_protocol_info_json(app_data, &global.interface, global.name);
 
         globals.push(GlobalNode {
             interface: global.interface.clone(),
@@ -282,7 +227,7 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                 if let Some(path) = &device.device_path {
                     println!("        path: {}", path.green());
                 } else {
-                    println!("        path: {}", "/dev/dri/card1".green());
+                    println!("        path: {}", "<unknown>".red());
                 }
 
                 if !device.connectors.is_empty() {
@@ -316,10 +261,7 @@ pub fn print_all_info(app_data: &AppData, sort_output: bool, protocol_filter: Op
                         clock_id.to_string().yellow()
                     );
                 } else {
-                    println!(
-                        "        presentation clock id: {} (CLOCK_MONOTONIC)",
-                        "1".yellow()
-                    );
+                    println!("        presentation clock id: {}", "<unknown>".red());
                 }
             } else {
                 println!("{}", "        [Warning] Presentation info not found!".red());
@@ -429,4 +371,49 @@ fn protocol_has_details(protocol: &str) -> bool {
             | "treeland_output_manager_v1"
             | "zxdg_output_manager_v1"
     )
+}
+
+fn get_protocol_info_json(
+    app_data: &AppData,
+    interface: &str,
+    name: u32,
+) -> Option<serde_json::Value> {
+    match interface {
+        "wl_seat" => app_data
+            .seats
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| serde_json::to_value(vec![s]).unwrap()),
+        "wl_output" => app_data
+            .outputs
+            .iter()
+            .find(|o| o.name == name)
+            .map(|o| serde_json::to_value(vec![o]).unwrap()),
+        "wl_shm" => app_data
+            .shm_info
+            .iter()
+            .find(|s| s.name == name)
+            .map(|s| serde_json::to_value(vec![s]).unwrap()),
+        "wp_drm_lease_device_v1" => app_data
+            .drm_lease_devices
+            .iter()
+            .find(|d| d.name == name)
+            .map(|d| serde_json::to_value(vec![d]).unwrap()),
+        "wp_presentation" => app_data
+            .presentation_info
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| serde_json::to_value(vec![p]).unwrap()),
+        "treeland_output_manager_v1" => app_data
+            .treeland_output_managers
+            .iter()
+            .find(|m| m.name == name)
+            .map(|m| serde_json::to_value(vec![m]).unwrap()),
+        "zxdg_output_manager_v1" => app_data
+            .xdg_output_managers
+            .iter()
+            .find(|m| m.name == name)
+            .map(|m| serde_json::to_value(vec![m]).unwrap()),
+        _ => None,
+    }
 }

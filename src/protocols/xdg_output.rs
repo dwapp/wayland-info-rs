@@ -120,6 +120,8 @@ impl Dispatch<ZxdgOutputManagerV1, UserData> for AppData {
         _conn: &Connection,
         _qh: &QueueHandle<AppData>,
     ) {
+        // ZxdgOutputManagerV1 currently does not emit events we need to track.
+        // The detailed individual output information is queried through ZxdgOutputV1.
     }
 }
 

@@ -22,7 +22,8 @@ fn main() {
         );
     }
 
-    let conn = Connection::connect_to_env().unwrap();
+    let conn = Connection::connect_to_env()
+        .expect("Failed to connect to Wayland display. Make sure a Wayland compositor is running.");
     let display = conn.display();
 
     let mut event_queue = conn.new_event_queue();
@@ -32,7 +33,9 @@ fn main() {
 
     let _registry = display.get_registry(&qh, ());
 
-    event_queue.roundtrip(&mut app_data).unwrap();
+    event_queue
+        .roundtrip(&mut app_data)
+        .expect("Initial Wayland roundtrip failed");
 
     let managers: Vec<_> = app_data.xdg_output_manager_objects.drain(..).collect();
     let outputs: Vec<_> = app_data.output_objects.drain(..).collect();
@@ -69,7 +72,9 @@ fn main() {
     for (index, seat) in seat_objects.iter().enumerate() {
         let seat_data = app::UserData::Seat { seat_index: index };
         let _keyboard = seat.get_keyboard(&qh, seat_data);
-        event_queue.roundtrip(&mut app_data).unwrap();
+        event_queue
+            .roundtrip(&mut app_data)
+            .expect("Wayland roundtrip failed while binding keyboard");
     }
 
     // Drain any events from earlier roundtrips before starting convergence detection.
@@ -77,9 +82,13 @@ fn main() {
 
     // Keep dispatching until no new events are received in a roundtrip,
     // indicating the compositor has finished sending initial state.
+    // 20 rounds is a practical upper bound: compositors typically converge
+    // in 2-3 rounds; this prevents an infinite loop if events keep arriving.
     const MAX_ROUNDTRIPS: usize = 20;
     for _ in 0..MAX_ROUNDTRIPS {
-        event_queue.roundtrip(&mut app_data).unwrap();
+        event_queue
+            .roundtrip(&mut app_data)
+            .expect("Wayland roundtrip failed during event convergence");
         if app_data.take_pending_events() == 0 {
             break;
         }
@@ -92,14 +101,22 @@ fn main() {
                 options.sort_output,
                 options.protocol_filter.as_deref(),
             );
-            println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json_payload)
+                    .expect("Failed to serialize JSON output")
+            );
         } else {
             let json_payload = to_json_basic(
                 &app_data,
                 options.sort_output,
                 options.protocol_filter.as_deref(),
             );
-            println!("{}", serde_json::to_string_pretty(&json_payload).unwrap());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json_payload)
+                    .expect("Failed to serialize JSON output")
+            );
         }
     } else if options.full_output {
         print_all_info(

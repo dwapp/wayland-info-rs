@@ -30,6 +30,7 @@ impl AppData {
         });
     }
 
+    // TODO: Implement handling of drm_lease_device events (e.g., done, connector, etc.)
     #[allow(dead_code)]
     pub(crate) fn update_drm_lease_device_path(&mut self, device_index: usize, path: String) {
         if let Some(device) = self.drm_lease_devices.get_mut(device_index) {
@@ -37,6 +38,7 @@ impl AppData {
         }
     }
 
+    // TODO: Implement handling of drm_lease_device events (e.g., done, connector, etc.)
     #[allow(dead_code)]
     pub(crate) fn add_drm_lease_connector(
         &mut self,
