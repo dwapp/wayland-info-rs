@@ -1,0 +1,5 @@
+wayland-info-rs (0.1.2-1) unstable; urgency=medium
+
+  * Initial release.
+
+ -- dwapp <dwapp@users.noreply.github.com>  Thu, 25 Jun 2026 10:37:00 +0800

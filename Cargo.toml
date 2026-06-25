@@ -2,7 +2,7 @@
 name = "wayland-info-rs"
 version = "0.1.2"
 edition = "2021"
-description = "A Rust implementation of wayland-info for inspecting Wayland compositor globals and protocol capabilities."
+description = "Rust implementation of wayland-info for inspecting Wayland compositor globals and protocol capabilities."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/dwapp/wayland-info-rs"
@@ -17,3 +17,18 @@ wayland-protocols = { version = "0.32.10", features = ["staging", "unstable", "c
 wayland-protocols-treeland = { version = "0.1.2", features = ["client"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[package.metadata.deb]
+maintainer = "dwapp <dwapp@users.noreply.github.com>"
+copyright = "2024 dwapp"
+license-file = ["LICENSE", "0"]
+depends = "libc6, libwayland-client0"
+section = "utils"
+priority = "optional"
+extended-description = """Rust implementation of wayland-info for inspecting
+Wayland compositor globals and protocol capabilities."""
+assets = [
+    ["target/release/wayland-info-rs", "usr/bin/wayland-info-rs", "755"],
+    ["USAGE.md", "usr/share/doc/wayland-info-rs/USAGE.md", "644"],
+    ["debian/changelog", "usr/share/doc/wayland-info-rs/changelog.Debian", "644"],
+]
